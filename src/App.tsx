@@ -31,7 +31,7 @@ import PasswordReset from "./PasswordReset"
 import LegacyImport from "./LegacyImport"
 import { supabase } from "./lib/supabase"
 import { applicationUser, backendError, rpc, saveRemoteListing, updateProfile } from "./lib/backend"
-import type { Session } from "@supabase/supabase-js"
+import { createProfileSessionController } from "./authProfile"
 
 type Page = "home" | "find" | "shul" | "shuls" | "shabbos" | CommunityPage
 type Prayer = "Shacharis" | "Mincha" | "Maariv" | "Shabbos" | "Daf Yomi"
@@ -1807,8 +1807,9 @@ export default function App() {
     initialRoute.selectedId,
   )
   const [mikvahQuery, setMikvahQuery] = useState("")
-  const [user, setUser] = useState<User | null>(null)
-  const [session, setSession] = useState<Session | null>(null)
+  const [user, setUserState] = useState<User | null>(null)
+  const authController = useRef<ReturnType<typeof createProfileSessionController> | null>(null)
+  const [listingsIdentity, setListingsIdentity] = useState<string | null>(null)
   const [authLoading, setAuthLoading] = useState(true)
   const [dataLoading, setDataLoading] = useState(false)
   const [recoveryAllowed, setRecoveryAllowed] = useState(false)
@@ -1820,23 +1821,36 @@ export default function App() {
   const userRef = useRef(user)
   userRef.current = user
   listingsRef.current = listings
+  const setUser = (profile: User | null) => {
+    if (profile) authController.current?.adopt(profile)
+    userRef.current = profile
+    setUserState(profile)
+  }
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, next) => {
-      setSession(next)
-      if (event === "PASSWORD_RECOVERY") { setRecoveryAllowed(true); setPage("reset-password") }
-      if (event === "SIGNED_OUT") { setUser(null); setListings([]); setAuthLoading(false) }
+    const controller = createProfileSessionController({
+      load: applicationUser,
+      onChange: state => {
+        userRef.current = state.user
+        setUserState(state.user)
+        setAuthLoading(state.loading)
+        if (state.error) setBackendNotice(state.error)
+      },
+      onIdentityChange: () => {
+        ++requestSequence.current
+        userRef.current = null
+        listingsRef.current = []
+        setListings([])
+        setListingsIdentity(null)
+        setDataLoading(false)
+      },
     })
-    return () => subscription.unsubscribe()
+    authController.current = controller
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, next) => {
+      controller.receive(next?.user || null)
+      if (event === "PASSWORD_RECOVERY") { setRecoveryAllowed(true); setPage("reset-password") }
+    })
+    return () => { subscription.unsubscribe(); controller.stop(); authController.current = null }
   }, [])
-  useEffect(() => {
-    let active = true
-    setAuthLoading(true)
-    if (!session?.user) { setUser(null); setListings([]); setAuthLoading(false); return }
-    applicationUser(session.user).then(profile => { if (active) setUser(profile) })
-      .catch(error => { if (active) { setUser(null); setListings([]); setBackendNotice(backendError(error)) } })
-      .finally(() => { if (active) setAuthLoading(false) })
-    return () => { active = false }
-  }, [session])
   const refreshData = async () => {
     const actor = userRef.current
     const sequence = ++requestSequence.current
@@ -1847,8 +1861,8 @@ export default function App() {
         actor ? rpc<Listing[]>(actor.role === "admin" ? "admin_listings" : "my_listings") : Promise.resolve([]),
       ])
       // Ignore a response belonging to an account that signed out/switched.
-      if (userRef.current?.id !== actor?.id || sequence !== requestSequence.current) return
-      setPublicListings(published); setListings(own); setBackendNotice("")
+      if (userRef.current?.id !== actor?.id || userRef.current?.role !== actor?.role || sequence !== requestSequence.current) return
+      setPublicListings(published); setListings(own); setListingsIdentity(actor ? `${actor.id}:${actor.role}` : null); setBackendNotice("")
     } catch (error) { if (sequence === requestSequence.current) setBackendNotice(backendError(error)); throw error }
     finally { if (sequence === requestSequence.current) setDataLoading(false) }
   }
@@ -1969,8 +1983,9 @@ export default function App() {
     }
     const protectedPages = ["dashboard", "account", "add-listing", "mikvah-form", "shul-form", "manage-shul", "onboarding", "confirmation"]
     if (protectedPages.includes(page)) {
-      if (authLoading || dataLoading) return <main className="portal-page"><p role="status">Loading your account and listings…</p></main>
+      if (authLoading && !user) return <main className="portal-page"><p role="status">Loading your account…</p></main>
       if (!user) return <LoginPage navigate={navigate} onLogin={setUser} intent={intent} />
+      if (listingsIdentity !== `${user.id}:${user.role}`) return <main className="portal-page"><p role="status">{dataLoading ? "Loading your listings…" : "Your listings could not be loaded. Please retry."}</p>{!dataLoading && <button className="button button--secondary" onClick={() => { void refreshData().catch(() => {}) }}>Retry</button>}</main>
     }
     if (page === "find")
       return (
@@ -2046,6 +2061,7 @@ export default function App() {
     if (page === "mikvah-form" && user)
       return (
         <MikvahForm
+          key={`${user.id}:${selectedId || "new"}`}
           user={user}
           existing={listings.find(
             (item) => item.id === selectedId && item.ownerId === user.id,
@@ -2057,6 +2073,7 @@ export default function App() {
     if (page === "shul-form" && user)
       return (
         <ShulForm
+          key={`${user.id}:${selectedId || "new"}`}
           user={user}
           existing={listings.find(
             (item) => item.id === selectedId && item.ownerId === user.id,
