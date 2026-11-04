@@ -1,4 +1,4 @@
-import { defineConfig, type HtmlTagDescriptor, type Plugin } from "vite"
+import { defineConfig, loadEnv, type HtmlTagDescriptor, type Plugin } from "vite"
 import react from "@vitejs/plugin-react"
 import tailwindcss from "@tailwindcss/vite"
 import { readFileSync } from "node:fs"
@@ -18,6 +18,7 @@ export default defineConfig(({ mode }) => {
       minify: !emitSourcemaps,
     },
     plugins: [
+      requireSupabaseEnvironment(mode),
       react(),
       tailwindcss(),
       figmaSiteConfiguration(siteConfiguration),
@@ -44,6 +45,30 @@ export default defineConfig(({ mode }) => {
     },
   }
 })
+
+// Vite otherwise builds successfully even though the browser client cannot start.
+function requireSupabaseEnvironment(mode: string): Plugin {
+  return {
+    name: "require-supabase-environment",
+    apply: "build",
+    buildStart() {
+      const env = loadEnv(mode, process.cwd(), "VITE_")
+      const missing = [
+        "VITE_SUPABASE_URL",
+        "VITE_SUPABASE_PUBLISHABLE_KEY",
+      ].filter((name) => !env[name]?.trim())
+
+      if (missing.length) {
+        this.error(
+          `Missing required environment variables: ${missing.join(", ")}. ` +
+            "Set them in Vercel Project Settings → Environment Variables for Production " +
+            "(and Preview if used), then redeploy. For local builds, use .env.local. " +
+            "Use the Supabase publishable key, never a secret or service-role key.",
+        )
+      }
+    },
+  }
+}
 
 type FigmaSiteConfiguration = {
   title?: string

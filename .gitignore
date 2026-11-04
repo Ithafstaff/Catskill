@@ -1,0 +1,29 @@
+# Dependencies (including nested installs) and the repository-local pnpm store
+node_modules/
+/.pnpm-store/
+
+# Vite production output; Vercel builds this from source
+/dist/
+
+# Vercel CLI project links and downloaded local deployment configuration
+/.vercel/
+
+# Local browser and Edge Function environment values
+# Keep the reviewed, value-free template available to collaborators.
+.env
+.env.*
+!.env.example
+
+# Supabase CLI metadata and local branch state
+# Keep config.toml, migrations, and function source trackable.
+/supabase/.temp/
+/supabase/.branches/
+
+# npm/pnpm diagnostic output; do not hide arbitrary application log fixtures
+npm-debug.log*
+pnpm-debug.log*
+.pnpm-debug.log*
+
+# macOS Finder metadata and AppleDouble resource-fork sidecars
+.DS_Store
+._*

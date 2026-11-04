@@ -4,12 +4,18 @@ A responsive community directory built with **React, TypeScript, Vite, and Tailw
 
 ## Development
 
-Requires Node.js 22 and pnpm 10.
+Requires Node.js 22.12 or newer in the 22.x series and pnpm 10.11.0.
 
 From the project folder, run:
 
 ```bash
 pnpm install --frozen-lockfile
+cp .env.example .env.local
+```
+
+Fill in the Supabase URL and publishable key in `.env.local`, then run:
+
+```bash
 pnpm dev
 ```
 
@@ -23,6 +29,56 @@ pnpm preview
 ```
 
 Deploy the generated `dist/` folder with a Vite-compatible host.
+
+### Deploy to Vercel
+
+The repository includes Vercel settings for Vite, a locked pnpm install,
+`pnpm build`, the `dist` output directory, and SPA rewrites for all application
+routes. The build checks TypeScript and stops with an explicit error if the
+required Supabase variables are absent.
+
+1. In the existing Vercel project, connect `Ithafstaff/Catskill` and set the
+   production branch to `main`. Use the repository root as the Root Directory;
+   do not select `src` or `dist`. Framework Preset: **Vite**; Node.js: **22.x**.
+2. Add these under **Settings → Environment Variables**, scoped to **Production**
+   and also **Preview** if you use preview deployments:
+
+   | Variable | Value |
+   | --- | --- |
+   | `VITE_SUPABASE_URL` | Your Supabase project HTTPS URL |
+   | `VITE_SUPABASE_PUBLISHABLE_KEY` | Your Supabase publishable key |
+   | `VITE_GEOAPIFY_API_KEY` | Optional Geoapify browser key for address search |
+
+   All `VITE_` values are public in the built JavaScript. Never use Supabase
+   secret/service-role keys, database passwords, or email-provider secrets here.
+   Environment changes require a new deployment because Vite embeds values at
+   build time. Do not set `FIGMA_PUBLIC_URL` in Vercel; it is for Figma previews.
+3. Confirm the Supabase migrations in [supabase/README.md](supabase/README.md)
+   have been applied to the project whose URL you configured. Vercel deploys the
+   frontend; it does not apply these database migrations or deploy the email worker.
+4. In Supabase **Authentication → URL Configuration**, set Site URL to
+   `https://catskill-eruv-app.vercel.app` and allow these exact redirect URLs:
+   - `https://catskill-eruv-app.vercel.app/auth/confirm`
+   - `https://catskill-eruv-app.vercel.app/auth/reset-password`
+
+   Use your actual domain if it differs. Add explicit preview callbacks when
+   testing preview authentication. Configure production SMTP as described in the
+   backend guide. If using Geoapify, allow the production origin in its key settings.
+5. Commit and push the prepared changes to `main` to trigger production deployment.
+   Alternatively, from the repository root, run `npx vercel@latest --prod`,
+   authenticate, and select the **existing** Vercel project. Wait for **Ready**
+   and confirm the production domain is assigned to that deployment.
+
+**“No Deployment”** on the domain means there is no successful production
+deployment assigned to it. DNS can be correct while this remains unresolved.
+Inspect the latest deployment's build logs if deployment fails. A successful
+preview alone does not populate the production domain; deploy or promote to Production.
+
+After deployment, open `/`, `/find`, `/shuls`, `/mikvahs`, `/login`, and `/admin`
+directly and refresh each. Verify published listings load, then check signup
+confirmation and password-reset callbacks with a test account. An anonymous
+visitor to `/admin` should see the login flow. Static assets must return CSS/JS,
+not the application HTML.
 
 ## Project structure
 
