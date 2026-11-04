@@ -1,0 +1,6 @@
+project_id = "mikvah"
+
+[functions.process-notifications]
+# This machine-only endpoint authenticates its caller with WORKER_SECRET.
+# A browser user JWT is deliberately insufficient to run it.
+verify_jwt = false
