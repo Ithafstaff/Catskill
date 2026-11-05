@@ -1666,6 +1666,13 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   text-decoration: underline;
 }
 
+.footer__top {
+  color: #ffffff;
+  margin-bottom: 60px;
+  text-align: center;
+  font-size: 24px;
+}
+
 .footer__bottom {
   margin-top: 60px;
   padding-top: 20px;
@@ -6143,6 +6150,11 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 
   .footer__brand {
     grid-column: 1 / -1;
+  }
+
+  .footer__top {
+    font-size: 18px;
+    margin-bottom: 30px;
   }
 
   .footer__bottom {

@@ -792,6 +792,9 @@ function Footer({
 }) {
   return (
     <footer className={`footer${mikvahTone ? " footer--mikvah" : ""}`}>
+      <div className="container footer__top">
+        <h2>לע״נ ישראל דוב בן יצחק ז״ל</h2>
+      </div>
       <div className="container footer__grid">
         <div className="footer__brand">
           <div className="wordmark wordmark--light">
