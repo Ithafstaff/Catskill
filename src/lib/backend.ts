@@ -1,6 +1,8 @@
+import { backendError } from "./backendError"
 import type { User as AuthUser } from "@supabase/supabase-js"
 import type { Listing, User } from "../Community"
 import { supabase } from "./supabase"
+import { confirmationRedirect } from "./authCallback"
 
 export type ReviewEvent = {
   id: string
@@ -11,17 +13,26 @@ export type ReviewEvent = {
   internalNote?: string
   actor?: string
 }
-export function backendError(error: unknown): string {
-  const value = error as {
-    message?: string
-    code?: string
-  }
-  if (["PGRST202", "PGRST205", "42P01", "42883"].includes(value?.code || ""))
-    return "The database setup has not been applied yet. Run the moderation migration in Supabase, then retry."
-  return (
-    value?.message ||
-    "We could not reach the server. Please retry; your edits have not been cleared."
-  )
+export { backendError } from "./backendError"
+
+export async function resendVerificationEmail(
+  email: string,
+  intent?: string,
+): Promise<void> {
+  const { error } = await supabase.auth.resend({
+    type: "signup",
+    email: email.trim(),
+    options: {
+      emailRedirectTo: confirmationRedirect(window.location.origin, intent),
+    },
+  })
+  if (error) throw new Error(backendError(error))
+}
+export async function requestPasswordResetEmail(email: string): Promise<void> {
+  const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+    redirectTo: `${window.location.origin}/auth/reset-password`,
+  })
+  if (error) throw new Error(backendError(error))
 }
 export async function rpc<T>(
   name: string,

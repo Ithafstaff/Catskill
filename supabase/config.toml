@@ -4,3 +4,7 @@ project_id = "mikvah"
 # This machine-only endpoint authenticates its caller with WORKER_SECRET.
 # A browser user JWT is deliberately insufficient to run it.
 verify_jwt = false
+
+[functions.send-auth-email]
+# Supabase Auth authenticates the raw body using Standard Webhooks signatures.
+verify_jwt = false

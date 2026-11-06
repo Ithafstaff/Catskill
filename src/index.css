@@ -1610,15 +1610,15 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 }
 
 .footer {
-  padding: 72px 0 24px;
+  padding: 64px 0 28px;
   background: var(--navy);
-  color: rgba(255,255,255,.68);
+  color: rgba(255,255,255,.8);
 }
 
 .footer__grid {
   display: grid;
-  grid-template-columns: 2.2fr repeat(3, 1fr);
-  gap: 80px;
+  grid-template-columns: minmax(0, 2.2fr) repeat(3, minmax(0, 1fr));
+  gap: 64px;
 }
 
 .wordmark--light {
@@ -1634,7 +1634,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .footer__brand small {
   max-width: 420px;
   display: block;
-  color: rgba(255,255,255,.4);
+  color: rgba(255,255,255,.7);
+  font-size: 13px;
   line-height: 1.6;
 }
 
@@ -1642,23 +1643,24 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 13px;
+  gap: 8px;
 }
 
 .footer__grid > div > strong {
   margin-bottom: 9px;
   color: var(--white);
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: .12em;
+  font-size: 15px;
+  font-weight: 600;
 }
 
 .footer__grid > div > button {
-  padding: 0;
+  min-height: 32px;
+  padding: 4px 0;
   border: 0;
   background: transparent;
-  color: rgba(255,255,255,.64);
-  font-size: 13px;
+  color: rgba(255,255,255,.8);
+  font-size: 14px;
+  text-align: left;
 }
 
 .footer__grid > div > button:hover {
@@ -1667,20 +1669,70 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 }
 
 .footer__top {
-  color: #ffffff;
-  margin-bottom: 60px;
+  color: var(--gold-pale);
+  margin-bottom: 48px;
   text-align: center;
+}
+
+.footer__top h2 {
+  margin: 0;
+  font-family: var(--font-serif);
   font-size: 24px;
+  font-weight: 500;
+  line-height: 1.5;
+  text-wrap: balance;
+}
+
+.footer__contact {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin-top: 36px;
+}
+
+.footer__contact p {
+  margin: 0;
+  color: rgba(255,255,255,.7);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.footer__contact a {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  min-height: 32px;
+  color: var(--gold-pale);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.6;
+  text-decoration: underline;
+  text-decoration-color: rgba(242,230,201,.45);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+  overflow-wrap: anywhere;
+  transition: color 160ms ease, text-decoration-color 160ms ease;
+}
+
+.footer__contact a:hover {
+  color: var(--white);
+  text-decoration-color: currentColor;
+}
+
+.footer :is(a, button):focus-visible {
+  outline: 2px solid var(--gold-pale);
+  outline-offset: 5px;
 }
 
 .footer__bottom {
-  margin-top: 60px;
-  padding-top: 20px;
-  border-top: 1px solid rgba(255,255,255,.12);
+  margin-top: 28px;
   display: flex;
   justify-content: space-between;
-  color: rgba(255,255,255,.38);
-  font-size: 11px;
+  gap: 16px;
+  color: rgba(255,255,255,.7);
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 .footer--mikvah {
@@ -2659,8 +2711,23 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 
 .auth-card {
   width: min(440px, 100%);
+  min-width: 0;
   display: grid;
   gap: 20px;
+  overflow-wrap: anywhere;
+}
+
+.auth-email-action {
+  display: grid;
+  gap: 12px;
+}
+
+.auth-email-action p {
+  margin: 0;
+}
+
+.auth-card .form-alert {
+  font-size: 14px;
 }
 
 .auth-card--wide {
@@ -6153,15 +6220,29 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   }
 
   .footer__top {
-    font-size: 18px;
     margin-bottom: 30px;
+  }
+
+  .footer__top h2 {
+    font-size: 22px;
+  }
+
+  .footer__contact {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0;
+    margin-top: 28px;
+  }
+
+  .footer__contact a {
+    max-width: 100%;
   }
 
   .footer__bottom {
     align-items: flex-start;
     flex-direction: column;
     gap: 8px;
-    margin-top: 40px;
+    margin-top: 24px;
   }
 
   .find-panel__inner {

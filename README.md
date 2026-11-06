@@ -5,6 +5,7 @@ A responsive community directory built with **React, TypeScript, Vite, and Tailw
 ## Development
 
 Requires Node.js 22.12 or newer in the 22.x series and pnpm 10.11.0.
+Use the canonical `pnpm-lock.yaml`; the stale npm lockfile has been removed.
 
 From the project folder, run:
 
@@ -62,8 +63,8 @@ required Supabase variables are absent.
    - `https://catskill-eruv-app.vercel.app/auth/reset-password`
 
    Use your actual domain if it differs. Add explicit preview callbacks when
-   testing preview authentication. Configure production SMTP as described in the
-   backend guide. If using Geoapify, allow the production origin in its key settings.
+   testing preview authentication. Deploy and enable the Resend Send Email Hook as described in the
+   backend guide. Set its server-only secrets and add the documented intent redirects. If using Geoapify, allow the production origin in its key settings.
 5. Commit and push the prepared changes to `main` to trigger production deployment.
    Alternatively, from the repository root, run `npx vercel@latest --prod`,
    authenticate, and select the **existing** Vercel project. Wait for **Ready**
@@ -103,15 +104,42 @@ Supabase. Database policies and authenticated RPCs enforce authorization. The
 admin route is `/admin`; it requires a verified account whose profile role was
 manually assigned by a trusted operator.
 
-Setup, migration, admin assignment, email-worker configuration, and operational
+Account verification and password reset use a signed Supabase Send Email Hook
+with Resend. The browser handles OTP, PKCE, and legacy hash callbacks, removes
+credentials from the address bar, and provides verification/recovery resends.
+Deploy `supabase functions deploy send-auth-email` separately from the frontend.
+Set `RESEND_API_KEY`, `AUTH_EMAIL_FROM`, `SEND_EMAIL_HOOK_SECRET`, and the
+production `PUBLIC_SITE_URL` only in Edge Function secrets.
+
+Setup, migration, admin assignment, auth/email-worker configuration, and operational
 checks are documented in [supabase/README.md](supabase/README.md).
 
 ```bash
+pnpm test:auth
 pnpm test:backend
 pnpm check:supabase --schema
 pnpm exec tsc --noEmit
 pnpm build
 ```
+
+Security checks added by the pre-launch audit:
+
+```bash
+pnpm test
+pnpm test:security
+pnpm scan:secrets
+pnpm audit
+```
+
+The build and browser client accept only a Supabase `sb_publishable_` key and
+an HTTPS project origin (HTTP localhost is allowed for local Supabase). Legacy
+JWT keys are deliberately rejected. The secret scanner prints locations only
+and uses focused patterns; it does not prove that every possible secret is absent.
+See [SECURITY_AUDIT_REPORT.md](SECURITY_AUDIT_REPORT.md),
+[PRODUCTION_READINESS_CHECKLIST.md](PRODUCTION_READINESS_CHECKLIST.md), and
+[SECURITY_FIXES_SUMMARY.md](SECURITY_FIXES_SUMMARY.md) for evidence and the
+remaining launch conditions. Repository fixes require deployment before they
+protect the public site.
 
 The backend tests run real PostgreSQL in an isolated embedded runtime; they do
 not modify the hosted project or send email. Live checks use only the

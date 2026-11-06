@@ -1,4 +1,4 @@
-# Dependencies (including nested installs) and the repository-local pnpm store
+# Dependencies and the repository-local pnpm store
 node_modules/
 /.pnpm-store/
 
@@ -8,21 +8,43 @@ node_modules/
 # Vercel CLI project links and downloaded local deployment configuration
 /.vercel/
 
-# Local browser and Edge Function environment values
-# Keep the reviewed, value-free template available to collaborators.
+# Local browser and Supabase Edge Function environment values
+# Templates must contain placeholders only; review before committing.
 .env
 .env.*
 !.env.example
+!.env.sample
+!.env.template
+
+# Private keys and key containers; public PEM certificates remain trackable.
+*.key
+*.p12
+*.pfx
+*-key.pem
+*_key.pem
+*.key.pem
+privkey.pem
+private.pem
 
 # Supabase CLI metadata and local branch state
 # Keep config.toml, migrations, and function source trackable.
 /supabase/.temp/
 /supabase/.branches/
 
+# Impeccable runtime state; keep the shared .impeccable/config.json.
+/.impeccable/hook.cache.json
+/.impeccable/hook.pending.json
+/.impeccable/config.local.json
+
 # npm/pnpm diagnostic output; do not hide arbitrary application log fixtures
 npm-debug.log*
 pnpm-debug.log*
 .pnpm-debug.log*
+
+# Local editor swap/backup files; shared editor configuration stays trackable.
+*.swp
+*.swo
+*~
 
 # macOS Finder metadata and AppleDouble resource-fork sidecars
 .DS_Store

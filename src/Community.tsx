@@ -7,7 +7,14 @@ import MinyanScheduleEditor, {
 } from "./MinyanSchedule"
 import { createLocalId } from "./ids"
 import { supabase } from "./lib/supabase"
-import { backendError, signIn, rpc } from "./lib/backend"
+import {
+  backendError,
+  signIn,
+  rpc,
+  resendVerificationEmail,
+  requestPasswordResetEmail,
+} from "./lib/backend"
+import { confirmationRedirect, type CallbackState } from "./lib/authCallback"
 
 import DirectoryExplorer from "./DirectoryExplorer"
 import { listingPlaces } from "./lib/mapPlaces"
@@ -245,14 +252,14 @@ export const FormField = ({
       aria-invalid={Boolean(error)}
     />
     {error ? (
-      <small className="field-error">{error}</small>
+      <small className="field-error" role="alert">{error}</small>
     ) : (
       hint && <small>{hint}</small>
     )}
   </label>
 )
 
-const PasswordField = ({
+export const PasswordField = ({
   id,
   label,
   value,
@@ -379,7 +386,7 @@ export const StatusBadge = ({ status }: { status: ListingStatus }) => (
   </span>
 )
 
-function AuthShell({
+export function AuthShell({
   children,
   asideTitle = "Keep community information current.",
   asideText = "Contributors help neighbors find trusted, accurate details about local Mikvahs, Shuls, and Minyanim.",
@@ -435,17 +442,23 @@ export function LoginPage({
   const [show, setShow] = useState(false)
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
+  const [unconfirmedEmail, setUnconfirmedEmail] = useState("")
   const submit = async (event: React.FormEvent) => {
     event.preventDefault()
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
       return setError("Please enter a valid email address.")
     if (!password) return setError("Please enter your password.")
     setLoading(true)
+    setError("")
+    setUnconfirmedEmail("")
     try {
       const signedIn = await signIn(email.trim(), password)
       onLogin(signedIn)
       navigate(signedIn.role === "admin" ? "admin" : intent === "mikvah" ? "mikvah-form" : intent === "shul" ? "shul-form" : "dashboard")
-    } catch (error) { setError(backendError(error)) } finally { setLoading(false) }
+    } catch (error) {
+      if ((error as { code?: string })?.code === "email_not_confirmed") setUnconfirmedEmail(email.trim())
+      setError(backendError(error))
+    } finally { setLoading(false) }
   }
   return (
     <AuthShell tone={intent === "mikvah" ? "mikvah" : "default"}>
@@ -460,6 +473,7 @@ export function LoginPage({
           onChange={(value) => {
             setEmail(value)
             setError("")
+            setUnconfirmedEmail("")
           }}
           placeholder="you@example.com"
           type="email"
@@ -467,6 +481,13 @@ export function LoginPage({
           error={error}
           required
         />
+        {unconfirmedEmail && (
+          <EmailResendAction
+            email={unconfirmedEmail}
+            intent={intent}
+            label="Resend confirmation email"
+          />
+        )}
         <div className="password-wrap">
           <FormField
             label="Password"
@@ -492,7 +513,7 @@ export function LoginPage({
           <button
             type="button"
             className="inline-link"
-            onClick={() => navigate("forgot")}
+            onClick={() => navigate("forgot", intent)}
           >
             Forgot Password?
           </button>
@@ -518,9 +539,11 @@ export function LoginPage({
 export function SignupPage({
   navigate,
   intent,
+  onVerificationEmail,
 }: {
   navigate: Navigate
   intent?: string
+  onVerificationEmail: (email: string) => void
 }) {
   const [data, setData] = useState({
     name: "",
@@ -551,9 +574,10 @@ export function SignupPage({
     try {
       const { error } = await supabase.auth.signUp({
         email: data.email.trim(), password: data.password,
-        options: { data: { name: data.name.trim(), phone: data.phone.trim() }, emailRedirectTo: `${window.location.origin}/auth/confirm` },
+        options: { data: { name: data.name.trim(), phone: data.phone.trim() }, emailRedirectTo: confirmationRedirect(window.location.origin, intent) },
       })
       if (error) throw error
+      onVerificationEmail(data.email.trim())
       navigate("verify", intent)
     } catch (error) { setError(backendError(error)) } finally { setLoading(false) }
   }
@@ -666,6 +690,85 @@ export function SignupPage({
   )
 }
 
+/** A wall-clock deadline keeps the cooldown accurate after background tabs resume. */
+function EmailResendAction({
+  email,
+  intent,
+  recovery = false,
+  initialCooldown = false,
+  label,
+}: {
+  email: string
+  intent?: string
+  recovery?: boolean
+  initialCooldown?: boolean
+  label: string
+}) {
+  const [deadline, setDeadline] = useState(() =>
+    initialCooldown ? Date.now() + 60000 : 0,
+  )
+  const [remaining, setRemaining] = useState(initialCooldown ? 60 : 0)
+  const [busy, setBusy] = useState(false)
+  const sending = useRef(false)
+  const [message, setMessage] = useState("")
+  const [error, setError] = useState("")
+  useEffect(() => {
+    if (!deadline) return
+    const tick = () => {
+      const seconds = Math.max(0, Math.ceil((deadline - Date.now()) / 1000))
+      setRemaining(seconds)
+      if (seconds === 0) setDeadline(0)
+    }
+    tick()
+    const timer = window.setInterval(tick, 1000)
+    return () => window.clearInterval(timer)
+  }, [deadline])
+  return (
+    <div className="auth-email-action">
+      <CommunityButton
+        variant="secondary"
+        className="button--full"
+        disabled={busy || remaining > 0 || !email.trim()}
+        onClick={async () => {
+          if (sending.current || Date.now() < deadline) return
+          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+            setError("Please enter a valid email address.")
+            return
+          }
+          sending.current = true
+          setBusy(true)
+          setError("")
+          setMessage("")
+          setDeadline(Date.now() + 60000)
+          setRemaining(60)
+          try {
+            if (recovery) await requestPasswordResetEmail(email)
+            else await resendVerificationEmail(email, intent)
+            setMessage(
+              recovery
+                ? "If an account exists for this email, you will receive a password recovery email. Check your inbox and spam folder."
+                : "If this address needs confirmation, you will receive a verification email. Check your inbox and spam folder.",
+            )
+          } catch (error) {
+            setError(backendError(error))
+          } finally {
+            sending.current = false
+            setBusy(false)
+          }
+        }}
+      >
+        {busy ? "Sending…" : remaining > 0 ? `${label} (${remaining}s)` : label}
+      </CommunityButton>
+      <p role="status">{message}</p>
+      {error && (
+        <p className="form-alert" role="alert">
+          {error}
+        </p>
+      )}
+    </div>
+  )
+}
+
 export function ForgotPage({
   navigate,
   intent,
@@ -677,16 +780,19 @@ export function ForgotPage({
   const [loading, setLoading] = useState(false)
   const [sent, setSent] = useState(false)
   const [error, setError] = useState("")
-  if (sent)
-    return (
-      <AuthShell tone={intent === "mikvah" ? "mikvah" : "default"}>
-        <div className="auth-card auth-success">
-          <span>
-            <Icon name="check" size={26} />
-          </span>
+  return (
+    <AuthShell tone={intent === "mikvah" ? "mikvah" : "default"}>
+      {sent ? (
+        <div className="auth-card">
           <PageHeading
             title="Check Your Email"
-            description={`If an account exists for ${email}, you will receive a password recovery email. Check your inbox and spam folder.`}
+            description={`If an account exists for ${email.trim()}, you will receive a password recovery email. Check your inbox and spam folder.`}
+          />
+          <EmailResendAction
+            email={email}
+            recovery
+            initialCooldown
+            label="Resend reset email"
           />
           <CommunityButton
             onClick={() => navigate("login", intent)}
@@ -694,54 +800,73 @@ export function ForgotPage({
           >
             Return to Login
           </CommunityButton>
+          <button
+            className="back-auth"
+            onClick={() => {
+              setSent(false)
+              setError("")
+            }}
+          >
+            Use a different email
+          </button>
         </div>
-      </AuthShell>
-    )
-  return (
-    <AuthShell tone={intent === "mikvah" ? "mikvah" : "default"}>
-      <form
-        className="auth-card"
-        onSubmit={async (event) => {
-          event.preventDefault()
-          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
-            setError("Please enter a valid email address.")
-          else {
-            setLoading(true); setError("")
-            try {
-              const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: `${window.location.origin}/auth/reset-password` })
-              if (error) throw error
-              setSent(true)
-            } catch (error) { setError(backendError(error)) } finally { setLoading(false) }
-          }
-        }}
-      >
-        <PageHeading
-          title="Reset Your Password"
-          description="Enter your account email and we'll help you return to your listings."
-        />
-        <FormField
-          label="Email Address"
-          value={email}
-          onChange={(value) => {
-            setEmail(value)
+      ) : (
+        <form
+          className="auth-card"
+          onSubmit={async (event) => {
+            event.preventDefault()
+            if (loading) return
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()))
+              return setError("Please enter a valid email address.")
+            setLoading(true)
             setError("")
+            try {
+              await requestPasswordResetEmail(email)
+              setSent(true)
+            } catch (error) {
+              setError(backendError(error))
+            } finally {
+              setLoading(false)
+            }
           }}
-          placeholder="you@example.com"
-          type="email"
-          error={error}
-          required
-        />
-        <CommunityButton type="submit" disabled={loading} className="button--full">
-          {loading ? "Sending…" : "Send Reset Link"}
-        </CommunityButton>
-        <button
-          type="button"
-          className="back-auth"
-          onClick={() => navigate("login", intent)}
         >
-          ← Return to Login
-        </button>
-      </form>
+          <PageHeading
+            title="Reset Your Password"
+            description="Enter your account email and we'll help you return to your listings."
+          />
+          <FormField
+            label="Email Address"
+            value={email}
+            onChange={(value) => {
+              setEmail(value)
+              setError("")
+            }}
+            placeholder="you@example.com"
+            type="email"
+            autoComplete="email"
+            required
+          />
+          {error && (
+            <p className="form-alert" role="alert">
+              {error}
+            </p>
+          )}
+          <CommunityButton
+            type="submit"
+            disabled={loading}
+            className="button--full"
+          >
+            {loading ? "Sending…" : "Send Reset Link"}
+          </CommunityButton>
+          <button
+            type="button"
+            className="back-auth"
+            onClick={() => navigate("login", intent)}
+          >
+            Return to Login
+          </button>
+        </form>
+      )}
     </AuthShell>
   )
 }
@@ -749,33 +874,108 @@ export function ForgotPage({
 export function VerifyPage({
   navigate,
   intent,
+  email: submittedEmail = "",
+  callback = { status: "idle" },
+  user,
+  profileLoading = false,
+  emailChange = false,
 }: {
   navigate: Navigate
   intent?: string
+  email?: string
+  callback?: CallbackState
+  user?: User | null
+  profileLoading?: boolean
+  emailChange?: boolean
 }) {
+  const [email, setEmail] = useState(submittedEmail)
+  const verified = callback.status === "verified"
   return (
-    <main
-      className={`portal-page portal-page--center${
-        intent === "mikvah" ? " portal-page--mikvah" : ""
-      }`}
-    >
-      <div className="success-panel">
-        <span className="success-panel__icon">
-          <Icon name="check" size={30} />
-        </span>
-        <p className="eyebrow">ACCOUNT CREATED</p>
-        <h1>Check your email</h1>
-        <p>
-          Open the confirmation link in your email, then sign in to manage listings.
-          If no email arrives, check spam or contact the site administrator.
-        </p>
-        <CommunityButton
-          onClick={() => navigate("login", intent)}
-        >
-          Go to login <Icon name="arrow" />
-        </CommunityButton>
+    <AuthShell tone={intent === "mikvah" ? "mikvah" : "default"}>
+      <div className="auth-card">
+        <PageHeading
+          title={
+            callback.status === "verifying"
+              ? "Verifying your email…"
+              : verified
+                ? emailChange
+                  ? "Email confirmation accepted"
+                  : "Your email is verified"
+                : callback.status === "error"
+                  ? "Request a new verification link"
+                  : "Check your email"
+          }
+          description={
+            verified
+              ? emailChange
+                ? "If confirmation is required at both addresses, open both emails to complete your email change."
+                : "Your email address is confirmed. Continue to your listings or sign in to your account."
+              : "Open the latest confirmation link in your email. Check your inbox and spam folder."
+          }
+        />
+        {callback.status === "verifying" ? (
+          <p role="status">Verifying your confirmation link…</p>
+        ) : verified ? (
+          <>
+            <p role="status">
+              {profileLoading
+                ? "Loading your account…"
+                : "Confirmation complete."}
+            </p>
+            <CommunityButton
+              disabled={profileLoading}
+              onClick={() =>
+                navigate(
+                  user
+                    ? user.role === "admin"
+                      ? "admin"
+                      : intent === "mikvah"
+                        ? "mikvah-form"
+                        : intent === "shul"
+                          ? "shul-form"
+                          : "dashboard"
+                    : "login",
+                  intent,
+                )
+              }
+            >
+              {user
+                ? intent
+                  ? "Continue to your form"
+                  : "Continue to your dashboard"
+                : "Go to login"}
+            </CommunityButton>
+          </>
+        ) : (
+          <>
+            {callback.error && (
+              <p className="form-alert" role="alert">
+                {callback.error}
+              </p>
+            )}
+            <FormField
+              label="Email Address"
+              value={email}
+              onChange={setEmail}
+              type="email"
+              autoComplete="email"
+              placeholder="you@example.com"
+              required
+              hint="Enter or edit the address that needs verification."
+            />
+            <EmailResendAction
+              email={email}
+              intent={intent}
+              initialCooldown={!!submittedEmail && callback.status === "idle"}
+              label="Resend verification email"
+            />
+            <CommunityButton onClick={() => navigate("login", intent)}>
+              Go to login <Icon name="arrow" />
+            </CommunityButton>
+          </>
+        )}
       </div>
-    </main>
+    </AuthShell>
   )
 }
 

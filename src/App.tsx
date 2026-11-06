@@ -32,6 +32,11 @@ import LegacyImport from "./LegacyImport"
 import { supabase } from "./lib/supabase"
 import { applicationUser, backendError, rpc, saveRemoteListing, updateProfile } from "./lib/backend"
 import { createProfileSessionController } from "./authProfile"
+import {
+  initialAuthCallback,
+  verifyAuthCallback,
+  type CallbackState,
+} from "./lib/authCallback"
 
 type Page = "home" | "find" | "shul" | "shuls" | "shabbos" | CommunityPage
 type Prayer = "Shacharis" | "Mincha" | "Maariv" | "Shabbos" | "Daf Yomi"
@@ -45,8 +50,11 @@ function readAppRoute(): { page: Page; selectedId?: string } {
   const review = path.match(/^\/admin\/review\/([^/]+)\/?$/)
   if (review) return { page: "admin-review", selectedId: review[1] }
   if (path === "/admin" || path === "/admin/") return { page: "admin" }
-  if (path === "/auth/reset-password") return { page: "reset-password" }
-  if (path === "/auth/confirm") return { page: "login" }
+  if (/^\/auth\/reset-password\/?$/.test(path)) return { page: "reset-password" }
+  if (/^\/auth\/confirm\/?$/.test(path))
+    return { page: initialAuthCallback?.recovery ? "reset-password" : "verify" }
+  if (path === "/verify") return { page: "verify" }
+  if (path === "/forgot") return { page: "forgot" }
   if (path === "/login") return { page: "login" }
   if (path === "/signup") return { page: "signup" }
   if (path === "/find") return { page: "find" }
@@ -793,7 +801,9 @@ function Footer({
   return (
     <footer className={`footer${mikvahTone ? " footer--mikvah" : ""}`}>
       <div className="container footer__top">
-        <h2>לע״נ ישראל דוב בן יצחק ז״ל</h2>
+        <h2 lang="he" dir="rtl">
+          לע״נ ישראל דוב בן יצחק ז״ל
+        </h2>
       </div>
       <div className="container footer__grid">
         <div className="footer__brand">
@@ -835,6 +845,12 @@ function Footer({
           <button>Accessibility</button>
           <button>Privacy</button>
         </div>
+      </div>
+      <div className="container footer__contact">
+        <p>For More Info Please Email</p>
+        <a href="mailto:eweiss@portairexpress.com">
+          eweiss@portairexpress.com
+        </a>
       </div>
       <div className="container footer__bottom">
         <span>© Catskills Eruv</span>
@@ -1805,7 +1821,13 @@ export default function App() {
   const [mapOrigin, setMapOrigin] = useState<[number, number] | null>(null)
   const [locationFeedback, setLocationFeedback] = useState("")
   const [locationModal, setLocationModal] = useState(false)
-  const [intent, setIntent] = useState<string>()
+  const [intent, setIntent] = useState<string | undefined>(initialAuthCallback?.intent)
+  const [verificationEmail, setVerificationEmail] = useState("")
+  const [callbackState, setCallbackState] = useState<CallbackState>({
+    status: initialAuthCallback?.isCallback ? "verifying" : "idle",
+  })
+  const callbackTask = useRef<Promise<CallbackState> | null>(null)
+  const callbackAbandoned = useRef(false)
   const [selectedId, setSelectedId] = useState<string | undefined>(
     initialRoute.selectedId,
   )
@@ -1839,6 +1861,7 @@ export default function App() {
         if (state.error) setBackendNotice(state.error)
       },
       onIdentityChange: () => {
+        setRecoveryAllowed(false)
         ++requestSequence.current
         userRef.current = null
         listingsRef.current = []
@@ -1850,9 +1873,31 @@ export default function App() {
     authController.current = controller
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, next) => {
       controller.receive(next?.user || null)
-      if (event === "PASSWORD_RECOVERY") { setRecoveryAllowed(true); setPage("reset-password") }
+      if (event === "SIGNED_OUT" || !next) setRecoveryAllowed(false)
+      if (event === "PASSWORD_RECOVERY" && next) {
+        setRecoveryAllowed(true)
+        setPage("reset-password")
+        window.history.replaceState({ page: "reset-password" }, "", "/auth/reset-password")
+      }
     })
     return () => { subscription.unsubscribe(); controller.stop(); authController.current = null }
+  }, [])
+  useEffect(() => {
+    const callback = initialAuthCallback
+    if (!callback?.isCallback) return
+    let active = true
+    // StrictMode remounts effects; a one-use token must only be exchanged once.
+    callbackTask.current ??= verifyAuthCallback(callback, supabase.auth)
+    void callbackTask.current.then(result => {
+      if (!active || callbackAbandoned.current) return
+      setCallbackState(result)
+      if (callback.recovery) {
+        setRecoveryAllowed(result.status === "verified")
+        setPage("reset-password")
+        window.history.replaceState({ page: "reset-password" }, "", "/auth/reset-password")
+      }
+    })
+    return () => { active = false }
   }, [])
   const refreshData = async () => {
     const actor = userRef.current
@@ -1887,6 +1932,7 @@ export default function App() {
   }, [])
 
   const navigate = (target: Page, anchor?: string) => {
+    callbackAbandoned.current = true
     const privatePages: Page[] = [
       "dashboard",
       "account",
@@ -1940,8 +1986,10 @@ export default function App() {
       setSelectedId(undefined)
     if (target === "shul" && !anchor) setSelectedId(undefined)
     if (target === "login" || target === "signup") setIntent(anchor)
+    else if ((target === "verify" || target === "forgot") && anchor) setIntent(anchor)
+    if (target !== page) setCallbackState({ status: "idle" })
 
-    const path = target === "find" ? "/find" : target === "mikvah-directory" ? "/mikvahs" : target === "mikvah-detail" && anchor ? `/mikvahs/${encodeURIComponent(anchor)}` : target === "shul" && anchor ? `/shuls/${encodeURIComponent(anchor)}` : target === "shuls" ? "/shuls" : target === "admin" ? "/admin" : target === "admin-review" && anchor ? `/admin/review/${encodeURIComponent(anchor)}` : target === "manage-shul" && anchor ? `/contributor/shuls/${encodeURIComponent(anchor)}` : target === "login" ? "/login" : target === "signup" ? "/signup" : target === "reset-password" ? "/auth/reset-password" : "/"
+    const path = target === "find" ? "/find" : target === "mikvah-directory" ? "/mikvahs" : target === "mikvah-detail" && anchor ? `/mikvahs/${encodeURIComponent(anchor)}` : target === "shul" && anchor ? `/shuls/${encodeURIComponent(anchor)}` : target === "shuls" ? "/shuls" : target === "admin" ? "/admin" : target === "admin-review" && anchor ? `/admin/review/${encodeURIComponent(anchor)}` : target === "manage-shul" && anchor ? `/contributor/shuls/${encodeURIComponent(anchor)}` : target === "verify" ? "/verify" : target === "forgot" ? "/forgot" : target === "login" ? "/login" : target === "signup" ? "/signup" : target === "reset-password" ? "/auth/reset-password" : "/"
     window.history.pushState({ page: target, selectedId: anchor }, "", path)
     setPage(target)
     window.scrollTo(0, 0)
@@ -1976,7 +2024,8 @@ export default function App() {
   }
   const content = (() => {
     if (page === "shuls") return <ShulsPage listings={publicListings} navigate={navigate} />
-    if (page === "reset-password") return <PasswordReset navigate={navigate} allowed={recoveryAllowed} />
+    if (page === "reset-password")
+      return <PasswordReset navigate={navigate} allowed={recoveryAllowed} callback={callbackState} />
     if ((page === "admin" || page === "admin-review")) {
       if (authLoading) return <main className="portal-page"><p role="status">Checking your account…</p></main>
       if (!user) return <LoginPage navigate={navigate} onLogin={setUser} />
@@ -2013,12 +2062,26 @@ export default function App() {
       return <LoginPage navigate={navigate} onLogin={setUser} intent={intent} />
     if (page === "signup")
       return (
-        <SignupPage navigate={navigate} intent={intent} />
+        <SignupPage
+          navigate={navigate}
+          intent={intent}
+          onVerificationEmail={setVerificationEmail}
+        />
       )
     if (page === "forgot")
       return <ForgotPage navigate={navigate} intent={intent} />
     if (page === "verify")
-      return <VerifyPage navigate={navigate} intent={intent} />
+      return (
+        <VerifyPage
+          navigate={navigate}
+          intent={intent}
+          email={verificationEmail}
+          callback={callbackState}
+          user={user}
+          profileLoading={authLoading}
+          emailChange={initialAuthCallback?.type === "email_change"}
+        />
+      )
     if (page === "onboarding") return <OnboardingPage navigate={navigate} />
     if (page === "dashboard" && user)
       return (

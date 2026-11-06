@@ -1,8 +1,14 @@
-import { defineConfig, loadEnv, type HtmlTagDescriptor, type Plugin } from "vite"
+import {
+  defineConfig,
+  loadEnv,
+  type HtmlTagDescriptor,
+  type Plugin,
+} from "vite"
 import react from "@vitejs/plugin-react"
 import tailwindcss from "@tailwindcss/vite"
 import { readFileSync } from "node:fs"
 import path from "node:path"
+import { validatePublicSupabaseConfig } from "./src/lib/publicConfig"
 
 // Vite config — https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
@@ -64,6 +70,18 @@ function requireSupabaseEnvironment(mode: string): Plugin {
             "Set them in Vercel Project Settings → Environment Variables for Production " +
             "(and Preview if used), then redeploy. For local builds, use .env.local. " +
             "Use the Supabase publishable key, never a secret or service-role key.",
+        )
+      }
+      try {
+        validatePublicSupabaseConfig(
+          env.VITE_SUPABASE_URL,
+          env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        )
+      } catch (error) {
+        this.error(
+          error instanceof Error
+            ? error.message
+            : "Invalid public Supabase configuration.",
         )
       }
     },

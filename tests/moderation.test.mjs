@@ -35,6 +35,15 @@ test("PostgreSQL moderation boundaries and workflow", async (t) => {
       "utf8",
     ),
   )
+  await db.exec(
+    await readFile(
+      new URL(
+        "../supabase/migrations/202611070001_security_hardening.sql",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  )
   for (const id of [owner, admin, other, unverified]) {
     await db.query(`insert into auth.users values($1,$2,$3,$4)`, [
       id,

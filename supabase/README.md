@@ -24,11 +24,27 @@ Apply in order to a fresh Supabase project, using its SQL Editor or the CLI:
 1. `migrations/202610290001_moderation.sql`
 2. `migrations/202610290002_import_directory.sql`
 3. `migrations/202610290003_notification_worker.sql`
+4. `migrations/202611070001_security_hardening.sql`
 
 Each file is transactional. The source import is repeatable and never overwrites
 reviewed records. The initial schema is intentionally not repeatable: do not
 re-run it over an existing installation. Future changes need new migrations.
 Source imports omit fake Shul examples and do not invent permission confirmations.
+The security migration validates nested schedules before saving (including drafts),
+limits field lengths and collection sizes, and enforces 60 successful listing
+saves per verified account per minute across API instances. Failed transactions
+do not consume that allowance. It checks existing schedule shapes and aborts
+without changing data if incompatible records require an operator's review.
+The prior save implementation moves to the unexposed `app_private` schema;
+browser roles cannot call it to bypass validation.
+
+Private listing, admin and history RPCs set `Cache-Control: private, no-store`.
+The browser also requests private Supabase resources with `cache: no-store`.
+These headers do not configure Supabase Auth, direct profile responses, or an
+external proxy/CDN. Before launch, verify successful private response headers
+using two isolated accounts. Configure a PostgREST pre-request hook or gateway
+policy for profile responses if required; inspect and compose with any existing
+hook rather than replacing it blindly. Do not cache private responses at a CDN.
 The import generator reads `src/MikvahListings.ts`; run
 `node scripts/generate-source-import.mjs` only when intentionally regenerating it.
 
@@ -59,8 +75,111 @@ Allow these exact redirects:
 
 Keep email confirmation enabled. For deployment, add the matching HTTPS
 production callbacks to the production project and set its Site URL. Configure
-custom SMTP for confirmations/recovery to arbitrary contributor addresses.
-Supabase's default sender is limited and must not be treated as production mail.
+the Resend Send Email Hook below for confirmations and recovery. Supabase's
+default sender is limited and must not be treated as production mail.
+
+## Authentication email hook (Resend)
+
+`functions/send-auth-email` replaces Supabase Auth email delivery with the
+Resend HTTP API. It supports `signup`, `email`, `email_change`, and `recovery`.
+It does not implement invitation or magic-link actions; do not enable those
+flows without extending the hook and its tests. Keep the Email provider and
+**Confirm email** enabled. When the hook is enabled, Auth uses the hook instead
+of SMTP. The moderation notification worker remains a separate endpoint.
+
+1. Verify a sending domain in Resend and create a sending API key. In Supabase
+   **Authentication → Auth Hooks → Send Email Hook**, create an HTTP hook for
+   `https://<project-ref>.supabase.co/functions/v1/send-auth-email`. Generate the
+   signing secret there; keep it in the server secret store. Enable the hook
+   only after the function is deployed with its matching signing secret.
+2. Set these **Edge Function secrets**, through the Supabase dashboard or an
+   ignored local secrets file (outside browser environment files):
+
+   ```dotenv
+   RESEND_API_KEY=<resend-sending-api-key>
+   AUTH_EMAIL_FROM=Catskills Eruv <no-reply@your-verified-domain.example>
+   SEND_EMAIL_HOOK_SECRET=v1,whsec_<base64-signing-secret-from-auth-hooks>
+   PUBLIC_SITE_URL=https://your-production-domain.example
+   ```
+
+   `AUTH_EMAIL_FROM` falls back to `NOTIFICATION_FROM`. One verified sender is
+   required. `PUBLIC_SITE_URL` is optional but recommended in production: when
+   set, it is the sole callback origin, even if the signed payload has another
+   Site URL. Without it, the signed hook's `email_data.site_url` is the trusted
+   origin. Use separate secrets/projects for local development and production.
+   A local example is `PUBLIC_SITE_URL=http://localhost:8443`; use that same
+   hostname in the browser and Supabase Site URL.
+3. From this repository, deploy and set the prepared secrets:
+
+   ```bash
+   supabase secrets set --env-file /path/to/ignored-auth-email-secrets.env
+   supabase functions deploy send-auth-email
+   ```
+
+   `config.toml` disables gateway JWT verification for this machine endpoint.
+   The handler instead requires **Standard Webhooks HMAC-SHA256** headers:
+   `webhook-id`, `webhook-timestamp`, and `webhook-signature`. It verifies the
+   exact raw body with `SEND_EMAIL_HOOK_SECRET`, accepts the `v1,whsec_` prefix,
+   and rejects timestamps more than five minutes old or in the future. No
+   browser JWT, publishable key, or unsigned shared-header fallback is accepted.
+4. Configure **Authentication → URL Configuration** with the local redirect
+   URLs above and these exact production URLs using your actual origin:
+
+   ```text
+   https://your-production-domain.example/auth/confirm
+   https://your-production-domain.example/auth/confirm?intent=mikvah
+   https://your-production-domain.example/auth/confirm?intent=shul
+   https://your-production-domain.example/auth/reset-password
+   ```
+
+   Add the `?intent=mikvah` and `?intent=shul` confirmation variants for each
+   local origin as well if testing the contributor form flows. Add preview
+   origins explicitly in a separate test project; the production hook pins its
+   production origin. Avoid broad wildcard production redirect rules.
+
+The hook builds `/auth/confirm?token_hash=…&type=…` or
+`/auth/reset-password?token_hash=…&type=recovery`. It ignores untrusted redirect
+origins/paths and forwards only allowlisted contributor intents. Secure Email
+Change sends the current address `token_hash_new` and the new address
+`token_hash`, following Supabase's backwards-compatible field mapping. Both
+confirmations may be required; the confirmation screen explains this.
+
+Each message has HTML and plain text, an escaped callback URL, a fallback link,
+and expiration/security guidance. Actual expiry is governed by Supabase Auth's
+email OTP settings. Resend requests have a 15-second timeout and a deterministic
+SHA-256 idempotency key per action, account, recipient, and token hash. Retrying
+a partially delivered email change reuses each message's key. Resend's finite
+idempotency window does not guarantee exactly-once delivery indefinitely.
+Provider acceptance does not guarantee inbox delivery. Disable link tracking
+in Resend for authentication links to avoid rewriting one-use URLs.
+
+Non-POST requests return 405, incomplete/invalid server configuration 503,
+invalid signatures 401, invalid/unsupported payloads 400, and delivery failures
+502. Success returns HTTP 200 with `{}`. Error JSON uses the Auth Hook
+`error: { http_code, message }` structure. Provider bodies, addresses, passwords,
+tokens, hashes, and credentials are never logged or returned. Disable request
+body capture in any external tracing for this endpoint. Neither
+`RESEND_API_KEY` nor `SEND_EMAIL_HOOK_SECRET` belongs in any `VITE_` variable,
+browser code, commit, or client bundle.
+
+The app captures callback parameters before creating the Supabase client,
+scrubs sensitive query/hash values with `replaceState`, and explicitly verifies
+OTP hashes, exchanges PKCE codes, or establishes legacy hash sessions. PKCE
+links require the browser that requested them (its locally stored verifier).
+A normal persisted session alone does not unlock the recovery screen. Verified
+recovery sessions are signed out after a successful password update; sign-out
+failures have an explicit retry. Signup/resend links preserve the intended
+Mikvah or Shul form. Resend buttons wait 60 seconds; Supabase's server rate
+limits remain authoritative, and recovery wording avoids account enumeration.
+
+Run `pnpm test:auth` for isolated tests with mocked provider/Auth responses.
+These do not send messages or verify hosted settings. After deployment, use a
+designated test account to check signup, unconfirmed login/resend, verification
+and intended-form navigation, forgot/resend, expired/used links, password
+update/sign-out/login, and both secure email-change confirmations. Check local
+and production redirects, spam folders, Resend delivery events, and Supabase
+hook status without logging link contents. No new database migration is needed;
+verified-user RPC policies remain authoritative.
 
 ## First admin
 
@@ -83,7 +202,8 @@ Supabase dashboard access. Public signup metadata cannot grant admin status.
 Moderation decisions commit independently of email. The outbox is written in
 the same transaction as the decision. The prepared Edge Function uses Resend;
 provider credentials and a verified sender are required before deploying it.
-Auth SMTP is a separate configuration from moderation notifications.
+Auth email delivery uses the separate Send Email Hook described above; the
+Resend API key may be shared, but caller authentication and senders are separate.
 
 Set server-side Edge Function secrets through the dashboard or a local ignored
 secrets file using `supabase secrets set --env-file PATH`:
@@ -100,6 +220,9 @@ Deploy using `supabase functions deploy process-notifications`. Its platform JWT
 check is disabled because this endpoint is machine-only; it checks the
 `x-worker-secret` header before any database/email access. A normal user JWT or
 publishable key cannot run it. Missing configuration fails closed.
+The handler also rejects shared secrets shorter than 32 characters and requires
+an HTTPS dashboard link. All responses use `private, no-store`. Redeploy this
+function separately after updating its source.
 
 Invoke the function with POST from a trusted scheduler, supplying that header.
 Store the scheduler secret in a server secret store/Vault, not source control
