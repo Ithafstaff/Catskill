@@ -2409,6 +2409,12 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 
 .shabbos-table {
   border-top: 1px solid var(--navy);
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.shabbos-table > [role="table"] {
+  min-width: 840px;
 }
 
 .shabbos-table__hint {
@@ -2422,7 +2428,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 
 .shabbos-table__head, .shabbos-table__row {
   display: grid;
-  grid-template-columns: 1.5fr repeat(5, 1fr) 100px;
+  grid-template-columns: minmax(180px, 1.4fr) repeat(3, minmax(140px, 1fr)) 110px;
   align-items: center;
   gap: 14px;
   padding: 15px 18px;
@@ -2456,7 +2462,52 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 
 .shabbos-table__row small {
   color: var(--muted);
-  font-size: 9px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.shabbos-table__row .shabbos-table__services {
+  gap: 16px;
+  padding: 12px 0;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.shabbos-service {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  line-height: 1.5;
+}
+
+.shabbos-period-label {
+  display: none;
+}
+
+.shabbos-not-published {
+  color: var(--slate);
+}
+
+.shabbos-empty {
+  padding: 32px;
+  background: var(--sage);
+}
+
+.shabbos-empty p {
+  max-width: 65ch;
+  margin: 12px 0 24px;
+  line-height: 1.7;
+}
+
+.shabbos-page .data-note--light {
+  color: rgba(255,255,255,.75);
+  line-height: 1.8;
+}
+
+:is(.shabbos-page, .shabbos-feature) .data-note a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .shabbos-reminder {
@@ -5833,7 +5884,42 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   }
 
   .shabbos-table__head, .shabbos-table__row {
-    min-width: 790px;
+    min-width: 0;
+  }
+
+  .shabbos-table > [role="table"] {
+    min-width: 0;
+  }
+
+  .shabbos-table__head {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .shabbos-table__row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+    padding: 24px 0;
+  }
+
+  .shabbos-table__row > span:first-child strong {
+    font-size: 18px;
+  }
+
+  .shabbos-table__row .shabbos-table__services {
+    padding: 0;
+    gap: 8px;
+  }
+
+  .shabbos-period-label {
+    display: block;
+    color: var(--slate);
+    font-size: 13px;
+    font-weight: 600;
   }
 
   .shabbos-reminder {
@@ -6340,14 +6426,14 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   }
 
   .shabbos-table__hint {
-    display: block;
+    display: none;
     margin: 0 0 12px;
     color: var(--slate);
     font-size: 12px;
   }
 
   .shabbos-table__head, .shabbos-table__row {
-    min-width: 760px;
+    min-width: 0;
   }
 
   .shabbos-reminder {

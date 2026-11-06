@@ -147,7 +147,7 @@ publishable key and verify public projection and anonymous access restrictions.
 
 ## Remaining prototype content
 
-Minyan discovery, Shabbos calendar values, maps, and sample prayer schedules
+Minyan discovery, maps, and sample weekday prayer schedules
 still use prototype data. They are separate from the new shared listing/review backend.
 The existing nine sourced Mikvah records are imported with attribution; this
 does not establish that their details are current. Confirm hours, contacts,
@@ -163,6 +163,40 @@ Run the focused tests with `pnpm test:daf-yomi` (Node.js 22.12 or newer). The te
 
 ### Home page calendar
 
-The home hero shows live Gregorian and Hebrew dates for America/New_York. Hebrew dates change at the calculated sea-level sunset for a fixed central Catskills reference (41.65, -74.65); the Gregorian date changes at New York midnight. This display uses `@hebcal/core` locally, requires no API key or network request, and follows the device clock. It refreshes while open and when the tab becomes visible again. This does not implement the separate Shabbos timetable placeholders.
+The home hero shows live Gregorian and Hebrew dates for America/New_York. Hebrew dates change at the calculated sea-level sunset for a fixed central Catskills reference (41.65, -74.65); the Gregorian date changes at New York midnight. This display uses `@hebcal/core` locally, requires no API key or network request, and follows the device clock. It refreshes while open and when the tab becomes visible again.
 
 Run `pnpm test:calendar` to check civil midnight, sunset, Hebrew month/year boundaries, leap day, and daylight saving changes.
+
+### Shabbos calendar and schedules
+
+`/shabbos` and the homepage Shabbos section calculate the weekly Torah reading,
+Gregorian and Hebrew dates, and Friday candle lighting locally with Hebcal.
+They use the central Catskills reference above, the Diaspora reading cycle,
+and 18 minutes before sunset. Times explicitly display EST/EDT and the Friday
+date. The current week's Shabbos remains visible through Saturday and advances
+on Sunday at New York midnight. A festival reading replaces the regular parsha
+when appropriate. The page refreshes its calendar while open and on return.
+
+Public services come from approved Shul versions returned by `directory_listings`,
+including main and additional locations. Only recurring schedules explicitly
+marked Shabbos appear. Fixed times, variable descriptions, custom service names
+(such as Daf Yomi), and service notes are preserved. Missing times are shown as
+not published; there is no sample-data fallback.
+
+To publish real schedules:
+
+1. Sign in and open the Contributor Portal to add a Shul, or open an existing
+   Shul from your dashboard and manage its schedules.
+2. Add a prayer schedule at the correct location. Choose Shabbos, select Friday
+   evening, Shabbos day, or Motzaei Shabbos, and enter the service and time.
+   Use Other for a custom service or shiur, and Variable for a relative time.
+3. Submit the listing for review. An administrator must approve the version
+   in `/admin` before it appears publicly. Reload the public page after approval.
+
+Before launch, review published records for test names, incorrect services,
+and outdated times. No existing database records are corrected or unpublished
+automatically by this implementation. Regional candle lighting does not follow
+the map search or device GPS; confirm exact local times and customs with each shul.
+
+Run `node --experimental-strip-types --test tests/shabbos.test.mjs` for calendar,
+timezone, DST, holiday reading, and publication-filtering checks.

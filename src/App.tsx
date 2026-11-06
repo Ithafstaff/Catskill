@@ -25,6 +25,8 @@ import { catskillsMikvahListings } from "./MikvahListings"
 import { formatMinyanSchedule } from "./MinyanSchedule"
 import ShulManagementPage from "./ShulManagement"
 import useDafYomi from "./useDafYomi"
+import useShabbos from "./useShabbos"
+import { CANDLE_LIGHTING_MINUTES, SHABBOS_PERIODS, getPublishedShabbosRows } from "./shabbos"
 import { catskillsShuls, type SourcedShul } from "./ShulListings"
 import AdminWorkspace from "./AdminWorkspace"
 import PasswordReset from "./PasswordReset"
@@ -58,6 +60,7 @@ function readAppRoute(): { page: Page; selectedId?: string } {
   if (path === "/login") return { page: "login" }
   if (path === "/signup") return { page: "signup" }
   if (path === "/find") return { page: "find" }
+  if (/^\/shabbos\/?$/.test(path)) return { page: "shabbos" }
   if (path === "/mikvahs") return { page: "mikvah-directory" }
   const detail = path.match(/^\/(mikvahs|shuls)\/([^/]+)\/?$/)
   if (detail) { try { return { page: detail[1] === "mikvahs" ? "mikvah-detail" : "shul", selectedId: decodeURIComponent(detail[2]) } } catch { return { page: "home" } } }
@@ -820,7 +823,7 @@ function Footer({
           <small>
             {mikvahTone
               ? "Hours and visiting requirements may change. Please confirm details with the Mikvah directly."
-              : "Sample schedules are not authoritative. Please confirm times with each shul."}
+              : "Please confirm prayer times and any schedule changes with the shul directly."}
           </small>
         </div>
         <div>
@@ -918,6 +921,8 @@ function HomePage({
   navigate,
   useLocation,
   listings,
+  schedulesLoading,
+  schedulesError,
 }: {
   prayer: Prayer
   setPrayer: (value: Prayer) => void
@@ -926,8 +931,12 @@ function HomePage({
   navigate: (page: Page, anchor?: string) => void
   useLocation: () => void
   listings: Listing[]
+  schedulesLoading: boolean
+  schedulesError: boolean
 }) {
   const dafYomi = useDafYomi()
+  const shabbos = useShabbos()
+  const featuredShabbos = !schedulesLoading && !schedulesError ? getPublishedShabbosRows(listings)[0] : undefined
   const activePrayer = schedules[prayer] ? prayer : "Shacharis"
   const approvedShuls = listings.filter(
     (item) => item.type === "Shul" && item.status === "Published",
@@ -1028,9 +1037,11 @@ function HomePage({
         <div className="container shabbos-feature__grid">
           <div className="shabbos-feature__intro">
             <p className="eyebrow eyebrow--gold">THIS SHABBOS</p>
-            <Heading>Parshas [dynamic value]</Heading>
+            <Heading>{shabbos?.reading || "Calendar unavailable"}</Heading>
             <p className="shabbos-date">
-              September [dynamic date] · [Hebrew date]
+              {shabbos
+                ? `${shabbos.saturdayLabel} · ${shabbos.hebrewDate}`
+                : "Please retry shortly for this week’s calendar."}
             </p>
             <p>
               A quieter rhythm for the seventh day. Review candle lighting and
@@ -1040,34 +1051,55 @@ function HomePage({
               <span className="candle__flame" />
               <span>
                 <small>CANDLE LIGHTING · LOCAL TIME</small>
-                <strong>[dynamic time]</strong>
+                <strong>{shabbos?.candleTime || "Unavailable"}</strong>
+                {shabbos && <small>{shabbos.fridayLabel}</small>}
               </span>
             </div>
             <small className="data-note">
-              Preview values update by selected location. Confirm all times with
-              your shul.
+              Central Catskills · {CANDLE_LIGHTING_MINUTES} minutes before sunset.
+              Calculated with{" "}
+              <a href="https://www.hebcal.com/" target="_blank" rel="noreferrer">
+                Hebcal
+              </a>
+              . Confirm local customs with your shul.
             </small>
           </div>
           <div className="shabbos-schedule">
             <div className="shabbos-schedule__head">
               <span>PARTICIPATING SHUL</span>
-              <strong>AHAVAS TORAH</strong>
+              <strong>{featuredShabbos?.name || "Community schedules"}</strong>
             </div>
-            <div>
-              <span>Friday</span>
-              <p>
-                Mincha <strong>[sample time]</strong>
-              </p>
-            </div>
-            <div>
-              <span>Shabbos Morning</span>
-              <p>
-                Shacharis <strong>[sample time]</strong>
-              </p>
-              <p>
-                Daf Yomi <strong>[sample time]</strong>
-              </p>
-            </div>
+            {featuredShabbos ? (
+              SHABBOS_PERIODS.map((period) => {
+                const services = featuredShabbos.services.filter(
+                  (service) => service.period === period,
+                )
+                return services.length ? (
+                  <div key={period}>
+                    <span>{period}</span>
+                    {services.map((service) => (
+                      <p key={service.id}>
+                        {service.prayer} <strong>{service.time}</strong>
+                      </p>
+                    ))}
+                  </div>
+                ) : null
+              })
+            ) : (
+              <div>
+                <p role="status">
+                  {schedulesLoading
+                    ? "Loading published schedules…"
+                    : schedulesError
+                      ? "Schedules are temporarily unavailable. Please retry the connection."
+                      : "No Shabbos schedules have been published yet."}
+                </p>
+                <p>
+                  Shul contributors can add service times and submit them for
+                  review.
+                </p>
+              </div>
+            )}
             <TextLink onClick={() => navigate("shabbos")}>
               View Full Shabbos Schedule
             </TextLink>
@@ -1644,36 +1676,21 @@ function ShulPage({
   )
 }
 
-function ShabbosPage({ navigate }: { navigate: (page: Page) => void }) {
-  const rows = [
-    [
-      "Ahavas Torah",
-      "456 Cedar Street, Catskills, NY",
-      "[sample]",
-      "[sample]",
-      "[sample]",
-      "[sample]",
-      "[sample]",
-    ],
-    [
-      "Bais Medrash",
-      "123 Maple Avenue, Catskills, NY",
-      "[sample]",
-      "[sample]",
-      "—",
-      "[sample]",
-      "[sample]",
-    ],
-    [
-      "Kehillas Beis El",
-      "82 Orchard Lane, Catskills, NY",
-      "[sample]",
-      "[sample]",
-      "[sample]",
-      "[sample]",
-      "[sample]",
-    ],
-  ]
+function ShabbosPage({
+  navigate,
+  listings,
+  loading,
+  error,
+  onRetry,
+}: {
+  navigate: (page: Page, anchor?: string) => void
+  listings: Listing[]
+  loading: boolean
+  error: boolean
+  onRetry: () => void
+}) {
+  const calendar = useShabbos()
+  const rows = getPublishedShabbosRows(listings)
   return (
     <main className="shabbos-page">
       <section className="shabbos-hero">
@@ -1682,26 +1699,55 @@ function ShabbosPage({ navigate }: { navigate: (page: Page) => void }) {
             <p className="eyebrow eyebrow--gold">THE SEVENTH DAY</p>
             <Heading level={1}>This Shabbos</Heading>
             <p>
-              Find candle lighting and congregation-specific schedules
-              throughout the neighborhood.
+              Candle lighting for the central Catskills and published Shabbos
+              schedules from our community’s shuls.
             </p>
             <small className="data-note data-note--light">
-              All religious dates and times shown are dynamic placeholders.
+              Central Catskills, NY · {CANDLE_LIGHTING_MINUTES} minutes before
+              sunset · New York time. Calendar calculated with{" "}
+              <a
+                href="https://www.hebcal.com/"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Hebcal
+              </a>
+              .
             </small>
           </div>
           <div className="shabbos-hero__summary">
-            <span>PARSHAS</span>
-            <strong>[dynamic value]</strong>
-            <p>
-              September [dynamic date]
-              <br />
-              [Hebrew date]
-            </p>
+            <span>THIS WEEK’S READING</span>
+            <strong>{calendar?.reading || "Calendar unavailable"}</strong>
+            {calendar ? (
+              <p>
+                <time dateTime={calendar.saturdayISO}>
+                  {calendar.saturdayLabel}
+                </time>
+                <br />
+                {calendar.hebrewDate}
+              </p>
+            ) : (
+              <p>
+                We could not calculate this week’s calendar. Please check again
+                shortly.
+              </p>
+            )}
             <div>
               <span className="candle__flame" />
               <span>
                 <small>CANDLE LIGHTING</small>
-                <b>[dynamic local time]</b>
+                {calendar ? (
+                  <>
+                    <b>
+                      <time dateTime={calendar.candleISO}>
+                        {calendar.candleTime}
+                      </time>
+                    </b>
+                    <span>{calendar.fridayLabel}</span>
+                  </>
+                ) : (
+                  <b>Unavailable</b>
+                )}
               </span>
             </div>
           </div>
@@ -1712,57 +1758,130 @@ function ShabbosPage({ navigate }: { navigate: (page: Page) => void }) {
           <SectionHeader
             eyebrow="NEIGHBORHOOD SCHEDULES"
             title="Participating Shuls"
-            description="Each schedule is maintained separately. Please confirm times with the congregation."
+            description="Recurring schedules supplied by shul contributors and approved for publication. All service times are local to the shul; confirm holiday changes directly."
           />
-          <p className="shabbos-table__hint">
-            Swipe sideways to see all prayer times.
-          </p>
-          <div
-            className="shabbos-table"
-            role="region"
-            aria-label="Participating shuls schedule"
-            tabIndex={0}
-          >
-            <div className="shabbos-table__head">
-              <span>Shul</span>
-              <span>Friday Mincha</span>
-              <span>Shacharis</span>
-              <span>Daf Yomi</span>
-              <span>Mincha</span>
-              <span>Maariv</span>
-              <span />
+          {loading || error || !rows.length ? (
+            <div className="shabbos-empty">
+              <Heading level={3}>
+                {loading
+                  ? "Loading Shabbos schedules…"
+                  : error
+                    ? "Schedules are temporarily unavailable"
+                    : "No Shabbos schedules published yet"}
+              </Heading>
+              <p role="status">
+                {loading
+                  ? "Checking the published community directory."
+                  : error
+                    ? "We could not load the published directory. Please retry or contact your shul for service times."
+                    : "Shul contributors can add Shabbos services through the Contributor Portal. Schedules appear here after admin approval."}
+              </p>
+              {!loading &&
+                (error ? (
+                  <Button variant="secondary" onClick={onRetry}>
+                    Retry schedules
+                  </Button>
+                ) : (
+                  <Button
+                    variant="secondary"
+                    onClick={() => navigate("shul-form")}
+                  >
+                    Add Your Shul’s Schedule
+                  </Button>
+                ))}
             </div>
-            {rows.map((row) => (
-              <div className="shabbos-table__row" key={row[0]}>
-                <span>
-                  <strong>{row[0]}</strong>
-                  <small>{row[1]}</small>
-                </span>
-                {row.slice(2).map((item, index) =>
-                  index < 5 ? (
-                    <span key={index}>
-                      {item}
-                      <small>Sample</small>
+          ) : (
+            <>
+              <p className="shabbos-table__hint">
+                Swipe sideways to see all prayer times.
+              </p>
+              <div
+                className="shabbos-table"
+                role="region"
+                aria-label="Participating shuls schedule"
+                tabIndex={0}
+              >
+                <div
+                  role="table"
+                  aria-label="Published recurring Shabbos services"
+                >
+                  <div className="shabbos-table__head" role="row">
+                    <span role="columnheader">Shul</span>
+                    {SHABBOS_PERIODS.map((period) => (
+                      <span role="columnheader" key={period}>
+                        {period}
+                      </span>
+                    ))}
+                    <span role="columnheader">
+                      <span className="sr-only">Details</span>
                     </span>
-                  ) : null,
-                )}
-                <Button variant="secondary" onClick={() => navigate("shul")}>
-                  View Shul
-                </Button>
+                  </div>
+                  {rows.map((row) => (
+                    <div className="shabbos-table__row" role="row" key={row.id}>
+                      <span role="cell">
+                        <strong>{row.name}</strong>
+                        <small>{row.address}</small>
+                      </span>
+                      {SHABBOS_PERIODS.map((period) => {
+                        const services = row.services.filter(
+                          (service) => service.period === period,
+                        )
+                        return (
+                          <span
+                            role="cell"
+                            className="shabbos-table__services"
+                            key={period}
+                          >
+                            <span className="shabbos-period-label">{period}</span>
+                            {services.length ? (
+                              services.map((service) => (
+                                <span
+                                  className="shabbos-service"
+                                  key={service.id}
+                                >
+                                  <b>{service.prayer}</b>
+                                  <span>{service.time}</span>
+                                  {service.notes && (
+                                    <small>{service.notes}</small>
+                                  )}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="shabbos-not-published">
+                                Not published
+                              </span>
+                            )}
+                          </span>
+                        )
+                      })}
+                      <span role="cell">
+                        <Button
+                          variant="secondary"
+                          onClick={() => navigate("shul", row.listingId)}
+                        >
+                          View Shul
+                        </Button>
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
-            ))}
-          </div>
+            </>
+          )}
           <div className="shabbos-reminder">
             <div>
               <Heading level={3}>A note about local times</Heading>
               <p>
-                Candle lighting and prayer times vary by location and
-                congregation. Catskills Eruv will use verified data sources and
-                shul-provided schedules in production.
+                Candle lighting is calculated for the site’s central Catskills
+                reference (41.65° N, 74.65° W), {CANDLE_LIGHTING_MINUTES}{" "}
+                minutes before sunset. Times vary by town and local custom.
+                Confirm with your shul before relying on this regional
+                reference. Service schedules are recurring; contact the
+                congregation about holiday or seasonal changes.
               </p>
             </div>
-            <Button variant="secondary" onClick={() => navigate("find")}>
-              Find a Weekday Minyan
+            <Button variant="secondary" onClick={() => navigate("shul-form")}>
+              Contribute a Schedule
             </Button>
           </div>
         </div>
@@ -1989,7 +2108,7 @@ export default function App() {
     else if ((target === "verify" || target === "forgot") && anchor) setIntent(anchor)
     if (target !== page) setCallbackState({ status: "idle" })
 
-    const path = target === "find" ? "/find" : target === "mikvah-directory" ? "/mikvahs" : target === "mikvah-detail" && anchor ? `/mikvahs/${encodeURIComponent(anchor)}` : target === "shul" && anchor ? `/shuls/${encodeURIComponent(anchor)}` : target === "shuls" ? "/shuls" : target === "admin" ? "/admin" : target === "admin-review" && anchor ? `/admin/review/${encodeURIComponent(anchor)}` : target === "manage-shul" && anchor ? `/contributor/shuls/${encodeURIComponent(anchor)}` : target === "verify" ? "/verify" : target === "forgot" ? "/forgot" : target === "login" ? "/login" : target === "signup" ? "/signup" : target === "reset-password" ? "/auth/reset-password" : "/"
+    const path = target === "shabbos" ? "/shabbos" : target === "find" ? "/find" : target === "mikvah-directory" ? "/mikvahs" : target === "mikvah-detail" && anchor ? `/mikvahs/${encodeURIComponent(anchor)}` : target === "shul" && anchor ? `/shuls/${encodeURIComponent(anchor)}` : target === "shuls" ? "/shuls" : target === "admin" ? "/admin" : target === "admin-review" && anchor ? `/admin/review/${encodeURIComponent(anchor)}` : target === "manage-shul" && anchor ? `/contributor/shuls/${encodeURIComponent(anchor)}` : target === "verify" ? "/verify" : target === "forgot" ? "/forgot" : target === "login" ? "/login" : target === "signup" ? "/signup" : target === "reset-password" ? "/auth/reset-password" : "/"
     window.history.pushState({ page: target, selectedId: anchor }, "", path)
     setPage(target)
     window.scrollTo(0, 0)
@@ -2056,7 +2175,7 @@ export default function App() {
           )}
         />
       )
-    if (page === "shabbos") return <ShabbosPage navigate={navigate} />
+    if (page === "shabbos") return <ShabbosPage navigate={navigate} listings={publicListings} loading={dataLoading} error={!!backendNotice} onRetry={() => { void refreshData().catch(() => {}) }} />
     if (page === "login" && user) return <main className="portal-page portal-page--center"><section className="auth-card"><h1>You’re signed in</h1><p>Your email is confirmed and your account is ready.</p><button className="button button--primary" onClick={() => navigate(user.role === "admin" ? "admin" : "dashboard")}>Continue to {user.role === "admin" ? "admin dashboard" : "your dashboard"}</button></section></main>
     if (page === "login")
       return <LoginPage navigate={navigate} onLogin={setUser} intent={intent} />
@@ -2194,6 +2313,8 @@ export default function App() {
         navigate={navigate}
         useLocation={() => setLocationModal(true)}
         listings={publicListings}
+        schedulesLoading={dataLoading}
+        schedulesError={!!backendNotice}
       />
     )
   })()
