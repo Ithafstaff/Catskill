@@ -14,6 +14,15 @@
         "value": "inter",
         "createdAt": "2026-11-05T22:01:05.440Z",
         "reason": "Agent: Inter predates this change in src/index.css; the user requested auth-screen consistency with the existing site, not a typography redesign."
+      },
+      {
+        "rule": "border-accent-on-rounded",
+        "value": "*",
+        "files": [
+          "src/maps.css"
+        ],
+        "createdAt": "2026-11-09T22:28:14.492Z",
+        "reason": "Agent review: src/maps.css:97 explicitly sets border-radius: 0 in the same selector as the 3px top border. This existing Find a Minyan popup is square, so the rounded-element finding is a false positive."
       }
     ]
   }

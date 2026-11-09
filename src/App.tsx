@@ -39,6 +39,7 @@ import {
   verifyAuthCallback,
   type CallbackState,
 } from "./lib/authCallback"
+import "./shuls.css"
 
 type Page = "home" | "find" | "shul" | "shuls" | "shabbos" | CommunityPage
 type Prayer = "Shacharis" | "Mincha" | "Maariv" | "Shabbos" | "Daf Yomi"
@@ -1253,15 +1254,6 @@ function HomePage({
               </div>
             )}
           </div>
-          <div>
-            <small>NEARBY SHIUR · SAMPLE</small>
-            <strong>Bais Medrash</strong>
-            <span>Sample time and distance</span>
-            <span>Shiur directory coming soon</span>
-            <button type="button" className="button button--secondary" disabled>
-              View Nearby Shiurim
-            </button>
-          </div>
         </div>
       </section>
 
@@ -1301,12 +1293,41 @@ function FindPage({ listings, navigate, initialOrigin }: { initialOrigin?: [numb
   </div></main>
 }
 
-function ShulsPage({ listings, navigate }: { listings: Listing[]; navigate: (page: Page, anchor?: string) => void }) {
+function ShulsPage({
+  listings,
+  navigate,
+}: {
+  listings: Listing[]
+  navigate: (page: Page, anchor?: string) => void
+}) {
   const places = useMemo(() => shulPlaces(listings), [listings])
-  return <main className="shuls-directory">
-    <section className="shuls-directory__hero"><div className="container shuls-directory__intro"><div><h1>Find a shul in the Catskills.</h1><p>Explore the map, find prayer schedules, and plan your visit.</p></div><Button variant="light" onClick={() => navigate("shul-form")}>Register a Shul <Icon name="arrow" size={16} /></Button></div></section>
-    <section className="shuls-directory__content"><div className="container"><h2>Our Shuls</h2><DirectoryExplorer places={places} onOpen={place => navigate(place.route, place.listingId)} /></div></section>
-  </main>
+  return (
+    <main className="shuls-directory">
+      <section className="shuls-directory__hero">
+        <div className="container shuls-directory__intro">
+          <div>
+            <h1>Find a shul in the Catskills.</h1>
+            <p>Explore the map, find prayer schedules, and plan your visit.</p>
+          </div>
+          <Button onClick={() => navigate("shul-form")}>
+            Register a Shul <Icon name="arrow" size={16} />
+          </Button>
+        </div>
+      </section>
+      <section className="shuls-directory__content" aria-labelledby="shuls-directory-heading">
+        <div className="container">
+          <div className="shuls-directory__heading">
+            <h2 id="shuls-directory-heading">Our Shuls</h2>
+          </div>
+          <DirectoryExplorer
+            places={places}
+            onOpen={place => navigate(place.route, place.listingId)}
+            shulsMode
+          />
+        </div>
+      </section>
+    </main>
+  )
 }
 
 function ShulPage({
