@@ -3451,8 +3451,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 
 .location-field {
   display: grid;
-  grid-template-columns: 1fr 240px;
-  align-items: stretch;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
   gap: 18px;
 }
 

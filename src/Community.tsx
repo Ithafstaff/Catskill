@@ -16,6 +16,9 @@ import {
 } from "./lib/backend"
 import { confirmationRedirect, type CallbackState } from "./lib/authCallback"
 
+import ListingMedia from "./ListingMedia"
+import CoverPhotoUpload from "./CoverPhotoUpload"
+import useCoverPhoto from "./useCoverPhoto"
 import DirectoryExplorer from "./DirectoryExplorer"
 import { listingPlaces } from "./lib/mapPlaces"
 import AddressAutocomplete from "./AddressAutocomplete"
@@ -43,6 +46,7 @@ export type AdditionalLocation = {
 export type ListingStatus = "Draft" | "Pending Review" | "Published" | "Changes Requested" | "Rejected" | "Archived"
 
 export type Listing = {
+  coverPhotoPath?: string | null
   reviewStatus?: string
   contributorEmail?: string
   contributorPhone?: string
@@ -1597,6 +1601,7 @@ export function MikvahForm({
   onSave: (listing: Listing) => Promise<Listing>
   navigate: Navigate
 }) {
+  const photo = useCoverPhoto(user.id, existing?.coverPhotoPath)
   const [step, setStep] = useState(0)
   const [saving, setSaving] = useState(false)
   const [data, setData] = useState<Record<string, string>>({
@@ -1652,26 +1657,26 @@ export function MikvahForm({
     return ""
   }
   const next = async () => {
-    if (saving) return
+    if (saving || photo.busy) return
     const message = validate()
     if (message) return setError(message)
     if (step < 5) setStep(step + 1)
     else {
       const item = listing("Pending Review")
       setSaving(true)
-      try { const saved = await onSave(item); navigate("confirmation", saved.id) }
+      try { const saved = await onSave({ ...item, coverPhotoPath: await photo.resolvePath() }); navigate("confirmation", saved.id) }
       catch (error) { setError(backendError(error)) } finally { setSaving(false) }
     }
   }
   const saveDraft = async () => {
-    if (saving) return
+    if (saving || photo.busy) return
     setSaving(true)
-    try { await onSave(listing("Draft")); navigate("dashboard") }
+    try { await onSave({ ...listing("Draft"), coverPhotoPath: await photo.resolvePath() }); navigate("dashboard") }
     catch (error) { setError(backendError(error)) } finally { setSaving(false) }
   }
   return (
     <FormShell
-      busy={saving}
+      busy={saving || photo.busy}
       tone="mikvah"
       title={existing ? "Edit Mikvah" : "Register a Mikvah"}
       subtitle="Please provide accurate information so community members can easily find its location, contact details, and visiting information."
@@ -1701,6 +1706,7 @@ export function MikvahForm({
             required
           />
           <AddressFields data={data} update={update} />
+          <CoverPhotoUpload photo={photo} />
         </>
       )}
       {step === 1 && (
@@ -1915,6 +1921,7 @@ export function MikvahForm({
           ]}
           onEdit={setStep}
         >
+          {photo.preview && <img src={photo.preview} alt="Cover photo for review" className="cover-photo-upload__preview" />}
           <Checkbox
             checked={data.confirmed === "yes"}
             onChange={(checked) => update("confirmed", checked ? "yes" : "")}
@@ -2025,6 +2032,7 @@ export function ShulForm({
   onSave: (listing: Listing) => Promise<Listing>
   navigate: Navigate
 }) {
+  const photo = useCoverPhoto(user.id, existing?.coverPhotoPath)
   const [step, setStep] = useState(0)
   const [saving, setSaving] = useState(false)
   const [data, setData] = useState<Record<string, string>>({
@@ -2077,7 +2085,7 @@ export function ShulForm({
     locations,
   })
   const next = async () => {
-    if (saving) return
+    if (saving || photo.busy) return
     if (
       step === 0 &&
       (!data.name || !data.address || !data.city || !data.state || !data.zip)
@@ -2105,7 +2113,7 @@ export function ShulForm({
     else {
       const item = listing("Pending Review")
       setSaving(true)
-      try { const saved = await onSave(item); navigate("confirmation", saved.id) }
+      try { const saved = await onSave({ ...item, coverPhotoPath: await photo.resolvePath() }); navigate("confirmation", saved.id) }
       catch (error) { setError(backendError(error)) } finally { setSaving(false) }
     }
   }
@@ -2184,16 +2192,16 @@ export function ShulForm({
   }
   return (
     <FormShell
-      busy={saving}
+      busy={saving || photo.busy}
       title={existing ? "Edit Shul" : "Register a Shul"}
       subtitle="Help your community find accurate Shul information, Gabbai contact details, and Minyan locations."
       steps={shulSteps}
       step={step}
       setStep={setStep}
       onDraft={async () => {
-        if (saving) return
+        if (saving || photo.busy) return
         setSaving(true)
-        try { await onSave(listing("Draft")); navigate("dashboard") }
+        try { await onSave({ ...listing("Draft"), coverPhotoPath: await photo.resolvePath() }); navigate("dashboard") }
         catch (error) { setError(backendError(error)) } finally { setSaving(false) }
       }}
       onContinue={next}
@@ -2218,6 +2226,7 @@ export function ShulForm({
             required
           />
           <AddressFields data={data} update={update} />
+          <CoverPhotoUpload photo={photo} />
         </>
       )}
       {step === 1 && (
@@ -2402,6 +2411,7 @@ export function ShulForm({
           ]}
           onEdit={setStep}
         >
+          {photo.preview && <img src={photo.preview} alt="Cover photo for review" className="cover-photo-upload__preview" />}
           <Checkbox
             checked={data.confirmed === "yes"}
             onChange={(checked) => update("confirmed", checked ? "yes" : "")}
@@ -2536,6 +2546,7 @@ export function MikvahDetail({
           </CommunityButton>
         </div>
       </section>
+      {listing.coverPhotoPath && <div className="portal-container listing-detail-cover"><ListingMedia name={listing.name} kind="Mikvah" address={[listing.address, listing.city, listing.state, listing.zip].filter(Boolean).join(", ")} mapLocation={listing.mapLocation} photoPath={listing.coverPhotoPath} /></div>}
       <div className="portal-container"><DirectoryExplorer compact places={listingPlaces([listing])} onOpen={() => {}} /></div>
       <section className="public-detail">
         <div className="portal-container public-detail__grid">

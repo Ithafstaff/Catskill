@@ -28,6 +28,7 @@ import useDafYomi from "./useDafYomi"
 import useShabbos from "./useShabbos"
 import { CANDLE_LIGHTING_MINUTES, SHABBOS_PERIODS, getPublishedShabbosRows } from "./shabbos"
 import { catskillsShuls, type SourcedShul } from "./ShulListings"
+import ListingMedia from "./ListingMedia"
 import AdminWorkspace from "./AdminWorkspace"
 import PasswordReset from "./PasswordReset"
 import LegacyImport from "./LegacyImport"
@@ -1123,10 +1124,7 @@ function HomePage({
             ))}
             {approvedShuls.map((shul) => (
               <article className="shul-card" key={shul.id}>
-                <div className="shul-card__image shul-card__image--verified">
-                  <Icon name="pin" size={34} />
-                  <span>Approved community listing</span>
-                </div>
+                <ListingMedia name={shul.name} kind="Shul" address={[shul.address, shul.city, shul.state, shul.zip].filter(Boolean).join(", ")} mapLocation={shul.mapLocation} photoPath={shul.coverPhotoPath} />
                 <div className="shul-card__body">
                   <Heading level={3}>{shul.name}</Heading>
                   <p>
@@ -1465,6 +1463,7 @@ function ShulPage({
             </div>
           </div>
         </section>
+        {listing.coverPhotoPath && <div className="container listing-detail-cover"><ListingMedia name={listing.name} kind="Shul" address={[listing.address, listing.city, listing.state, listing.zip].filter(Boolean).join(", ")} mapLocation={listing.mapLocation} photoPath={listing.coverPhotoPath} /></div>}
         <div className="container"><DirectoryExplorer compact places={listingPlaces([listing])} onOpen={place => navigate(place.route, place.listingId)} /></div>
         <section className="section detail-content">
           <div className="container detail-grid">

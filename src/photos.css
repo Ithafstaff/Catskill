@@ -1,0 +1,31 @@
+.cover-photo-upload { margin: 28px 0 20px; padding: 22px; border: 1px dashed #c6cfd2; border-radius: 6px; background: #fbfaf7; color: #102744; }
+.cover-photo-upload h3 { margin: 0 0 8px; font: 600 18px Georgia, serif; }
+.cover-photo-upload h3 span { font: 400 13px system-ui, sans-serif; color: #536575; }
+.cover-photo-upload p { font-size: 14px; line-height: 1.6; margin: 0 0 16px; }
+.cover-photo-upload__preview { display: block; width: 100%; max-height: 260px; object-fit: contain; background: #eef0ed; border-radius: 4px; margin-bottom: 16px; }
+.cover-photo-upload__actions { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+.cover-photo-upload__choose { position: relative; overflow: hidden; display: inline-flex; padding: 11px 16px; border: 1px solid #102744; border-radius: 4px; background: #102744; color: white; font-size: 14px; font-weight: 600; cursor: pointer; }
+.cover-photo-upload__choose input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.cover-photo-upload__choose:focus-within { outline: 3px solid #af7a16; outline-offset: 3px; }
+.cover-photo-upload__actions button { border: 0; background: none; color: #91385d; font: inherit; text-decoration: underline; cursor: pointer; }
+.cover-photo-upload small { display: block; margin-top: 14px; color: #536575; font-size: 12px; line-height: 1.6; }
+.cover-photo-upload .cover-photo-upload__error { margin: 12px 0 0; color: #a12e26; }
+
+.listing-media { position: relative; width: 100%; height: 218px; overflow: hidden; isolation: isolate; background: #102744; }
+.listing-media > img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.listing-media__placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; height: 100%; padding: 20px; color: #e2bc66; text-align: center; }
+.listing-media__placeholder > span { font-size: 38px; line-height: 1; }
+.listing-media__placeholder small { font: 500 12px system-ui, sans-serif; color: white; }
+.listing-media__pin { width: 38px; height: 46px; --pin-color: #102744; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -100%); color: white; }
+.listing-media__pin.directory-map-pin--mikvah { --pin-color: #91385d; }
+.listing-media__attribution { position: absolute; bottom: 0; right: 0; max-width: 100%; padding: 3px 6px; background: #fffffff2; color: #102744; font: 9px/1.4 system-ui, sans-serif; text-align: right; }
+.listing-media__attribution a { text-decoration: underline; }
+.directory-explorer__list article > .listing-media { margin-bottom: 16px; }
+.shuls-directory .directory-explorer__list article > .listing-media { margin-bottom: 0; }
+.listing-detail-cover { padding-top: 24px; }
+.listing-detail-cover .listing-media { height: 360px; max-width: 800px; }
+.review-cover-photo { margin: 16px 0 24px; }
+.review-cover-photo button { text-decoration: underline; cursor: pointer; }
+.admin-photo-confirmation { display: flex !important; align-items: start; gap: 10px; font-size: 14px; line-height: 1.6; }
+.admin-photo-confirmation input { width: 18px; height: 18px; flex: none; margin-top: 4px; }
+@media(max-width: 600px) { .listing-detail-cover .listing-media { height: 240px; } }

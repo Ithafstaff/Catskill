@@ -7,13 +7,16 @@ import {
 } from "./Community"
 import { backendError, rpc, type ReviewEvent } from "./lib/backend"
 import { formatMinyanSchedule } from "./MinyanSchedule"
+import ReviewCoverPhoto from "./ReviewCoverPhoto"
 import "./admin.css"
 
 const date = (value?: string) =>
   value ? new Date(value).toLocaleString() : "Not submitted"
-function Details({ item }: { item: Listing }) {
+function Details({ item, onPhotoReady }: { item: Listing; onPhotoReady?: (ready: boolean) => void }) {
   return (
     <>
+      <h3>Cover photo</h3>
+      <ReviewCoverPhoto key={item.coverPhotoPath || "no-photo"} path={item.coverPhotoPath} name={item.name} onReady={onPhotoReady} />
       <dl className="admin-fields">
         {Object.entries({
           Name: item.name,
@@ -89,7 +92,12 @@ export default function AdminWorkspace({
   const [notice, setNotice] = useState("")
   const [history, setHistory] = useState<ReviewEvent[]>([])
   const [historyError, setHistoryError] = useState("")
+  const [photoReady, setPhotoReady] = useState(false)
+  const [photoReviewed, setPhotoReviewed] = useState(false)
   const item = listings.find((l) => l.id === selectedId)
+  const needsPhotoReview = Boolean(item?.coverPhotoPath || item?.publishedVersion?.coverPhotoPath)
+  const photoReviewKey = `${item?.versionId || ""}:${item?.coverPhotoPath || ""}`
+  useEffect(() => { setPhotoReady(false); setPhotoReviewed(false) }, [photoReviewKey])
   useEffect(() => {
     setFeedback("")
     setNote("")
@@ -147,6 +155,9 @@ export default function AdminWorkspace({
       return setError(
         "Explain the decision to the contributor before continuing.",
       )
+    if (decision === "approved" && needsPhotoReview && (!photoReviewed || Boolean(item.coverPhotoPath) && !photoReady)) {
+      return setError("View and confirm the cover photo change before approving.")
+    }
     setBusy(true)
     setError("")
     try {
@@ -331,7 +342,7 @@ export default function AdminWorkspace({
                       )}
                     <section>
                       <h3>Version {item.versionNumber}</h3>
-                      <Details item={item} />
+                      <Details key={item.versionId} item={item} onPhotoReady={setPhotoReady} />
                     </section>
                   </div>
                 </section>
@@ -383,7 +394,11 @@ export default function AdminWorkspace({
                         placeholder="Visible to administrators only."
                       />
                     </label>
-                    <CommunityButton onClick={() => decide("approved")}>
+                    {needsPhotoReview && <label className="admin-photo-confirmation">
+                      <input type="checkbox" checked={photoReviewed} disabled={Boolean(item.coverPhotoPath) && !photoReady} onChange={event => setPhotoReviewed(event.target.checked)} />
+                      {item.coverPhotoPath ? "I reviewed this version’s photo and its suitability for publication." : "I reviewed the removal of the currently published photo."}
+                    </label>}
+                    <CommunityButton disabled={needsPhotoReview && (!photoReviewed || Boolean(item.coverPhotoPath) && !photoReady)} onClick={() => decide("approved")}>
                       {item.visibility === "archived" ? "Approve version (keep archived)" : "Approve & publish"}
                     </CommunityButton>
                     <CommunityButton

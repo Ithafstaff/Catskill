@@ -292,3 +292,35 @@ References:
 - https://supabase.com/docs/guides/local-development/cli-workflows
 - https://resend.com/docs/api-reference/emails/send-email
 - https://resend.com/docs/dashboard/emails/idempotency-keys
+
+## Optional listing cover photos
+
+Apply `migrations/202611130001_listing_cover_photos.sql` **after** the security
+hardening migration. This creates the private `listing-covers` Storage bucket,
+limits objects to JPG/PNG/WebP and 5 MB, and adds a versioned `coverPhotoPath`.
+No extra API keys or frontend environment variables are required.
+
+The forms keep photo selections in memory while moving between steps. Uploads
+occur on Save as Draft or Submit for Review. The browser re-encodes the image
+without EXIF/location metadata, reducing the longest edge to at most 1600 pixels.
+A new, random object path is used for every replacement; upload overwrite and
+client delete are deliberately not allowed. If a listing save fails after an
+upload, retrying reuses that upload while the form is open. Removing the photo
+removes the version reference, rather than deleting a previous version's file.
+
+Owners and website administrators can read private photos. Anonymous users can
+only read the exact object referenced by a currently published, approved version.
+Approval of a replacement switches that reference; a pending/rejected replacement
+does not expose it or replace the public photo. The admin review page displays the submitted photo beside the currently approved
+version. Administrators confirm photo review before approving; removals are
+explicitly confirmed too. Public cards show the approved photo, then a
+non-interactive pinned map preview if a usable location is available, then a
+placeholder. Map previews reuse OpenFreeMap and the existing address geocoder;
+no new API keys are required.
+
+Before release, test a real upload using a confirmed contributor account, reopen
+its saved draft, inspect it as an administrator, and check private/public access
+before and after approval. Unit/database tests use a local PostgreSQL runtime
+with a minimal Storage schema; they do not prove hosted Storage upload delivery.
+Unreferenced objects may remain after abandoned/failed saves. Any later cleanup
+job must retain objects referenced by all listing versions, including history.

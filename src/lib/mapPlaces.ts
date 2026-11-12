@@ -5,6 +5,8 @@ import { parseCoordinates } from './coordinates.ts'
 export type MapPlace = {
   id: string
   name: string
+  coverPhotoPath?: string | null
+  photoUrl?: string
   address: string
   kind: 'Shul' | 'Mikvah'
   coordinates: [number, number] | null
@@ -18,7 +20,7 @@ export function listingPlaces(listings: Listing[]): MapPlace[] {
     const place: MapPlace = {
       id: item.id, name: item.name, address, kind: item.type,
       coordinates: parseCoordinates(item.mapLocation), route: item.type === 'Shul' ? 'shul' : 'mikvah-detail',
-      listingId: item.id, schedules: item.primarySchedules || [],
+      listingId: item.id, schedules: item.primarySchedules || [], coverPhotoPath: item.coverPhotoPath,
     }
     return [place, ...(item.type === 'Shul' ? item.locations || [] : []).map(location => ({
       ...place, id: `${item.id}:${location.id}`, name: `${item.name} — ${location.name}`,
@@ -30,7 +32,7 @@ export function shulPlaces(listings: Listing[]): MapPlace[] {
   const published = listingPlaces(listings).filter(place => place.kind === 'Shul')
   const sourced: MapPlace[] = catskillsShuls.map(item => ({
     id: `real:${item.id}`, listingId: `real:${item.id}`, name: item.name, address: item.address,
-    kind: 'Shul', route: 'shul', coordinates: null, schedules: [],
+    kind: 'Shul', route: 'shul', coordinates: null, schedules: [], photoUrl: item.photo,
   }))
   const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '')
   return [...published, ...sourced.filter(item => !published.some(other => normalize(other.address) === normalize(item.address)))]

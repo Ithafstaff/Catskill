@@ -35,13 +35,17 @@ export default function DirectoryMapCanvas({ places, selected, onSelect, origin,
     const bounds = new LngLatBounds()
     places.forEach(place => {
       const button = document.createElement('button')
-      button.className = 'directory-map-pin'
+      button.className = `directory-map-pin directory-map-pin--${place.kind === 'Mikvah' ? 'mikvah' : 'shul'}`
       button.type = 'button'
-      button.textContent = place.kind === 'Mikvah' ? 'M' : 'S'
-      button.setAttribute('aria-label', `Select ${place.name}`)
-      button.title = place.name
+      // Only fixed SVG paths go into this markup; listing text uses DOM attributes.
+      const icon = place.kind === 'Mikvah'
+        ? '<path d="M12 3c-2.4 3.5-6 7.1-6 11a6 6 0 0 0 12 0c0-3.9-3.6-7.5-6-11Z"/><path d="M9 14a3 3 0 0 0 3 3"/>'
+        : '<path d="M4 21V10l8-6 8 6v11H4Z"/><path d="M9 21v-7h6v7M2 10l10-8 10 8M7 10h.01M17 10h.01"/>'
+      button.innerHTML = `<span class="directory-map-pin__body"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${icon}</svg></span>`
+      button.setAttribute('aria-label', `Select ${place.kind}: ${place.name}`)
+      button.title = `${place.name} · ${place.kind}`
       button.addEventListener('click', () => callback.current(place.id))
-      const pin = new Marker({ element: button }).setLngLat(place.point).addTo(instance)
+      const pin = new Marker({ element: button, anchor: 'bottom' }).setLngLat(place.point).addTo(instance)
       markers.current.set(place.id, pin)
       bounds.extend(place.point)
     })
@@ -57,6 +61,6 @@ export default function DirectoryMapCanvas({ places, selected, onSelect, origin,
     })
     const place = places.find(item => item.id === selected)
     if (place) map.current?.easeTo({ center: place.point, duration: 300 })
-  }, [selected, extent])
-  return <><div ref={container} className="directory-map-canvas" role="region" aria-label="Interactive directory map" />{error && <p role="status">{error}</p>}</>
+  }, [selected, extent, origin?.[0], origin?.[1], reset])
+  return <><div ref={container} className="directory-map-canvas" role="region" aria-label="Interactive directory map" /><div className="directory-map-legend" aria-label="Map pin legend"><span><i className="directory-map-legend__mikvah" aria-hidden="true" />Mikvah</span><span><i className="directory-map-legend__shul" aria-hidden="true" />Shul</span></div>{error && <p role="status">{error}</p>}</>
 }

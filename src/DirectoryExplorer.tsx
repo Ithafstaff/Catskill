@@ -9,6 +9,7 @@ import {
 } from "react"
 import type { ReactNode } from "react"
 import AddressAutocomplete from "./AddressAutocomplete"
+import ListingMedia from "./ListingMedia"
 import { geocodePublicAddress, type GeocodedPoint } from "./lib/geoapify"
 import { distanceMiles, type MapPlace } from "./lib/mapPlaces"
 import { formatMinyanSchedule, type MinyanSchedule } from "./MinyanSchedule"
@@ -177,6 +178,7 @@ export default function DirectoryExplorer({
             : a.name.localeCompare(b.name),
         ),
     [
+      places,
       signature,
       points,
       query,
@@ -576,6 +578,7 @@ export default function DirectoryExplorer({
                   </strong>
                 </div>
               )}
+              {!findMode && !compact && <ListingMedia name={place.name} kind={place.kind} address={place.address} point={place.point} photoPath={place.coverPhotoPath} photoUrl={place.photoUrl} />}
               <div className="directory-place__content">
                 {shulsMode && selected === place.id && (
                   <span className="directory-place-selected">
